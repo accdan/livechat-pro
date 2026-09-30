@@ -1,0 +1,43 @@
+{
+  "name": "livechat-pro-95",
+  "version": "1.0.0",
+  "description": "Retro Windows 95 Multi-Platform Stream Chat Aggregator",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:portable": "npx electron-builder --win portable"
+  },
+  "keywords": [
+    "livechat",
+    "youtube",
+    "twitch",
+    "win95",
+    "retro"
+  ],
+  "author": "Antigravity Systems",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.livechatpro.95",
+    "productName": "LiveChat Pro",
+    "files": [
+      "index.html",
+      "style.css",
+      "app.js",
+      "main.js",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": "portable"
+    },
+    "portable": {
+      "artifactName": "LiveChatPro-Portable.exe"
+    }
+  },
+  "dependencies": {
+    "tiktok-live-connector": "^2.5.0"
+  }
+}

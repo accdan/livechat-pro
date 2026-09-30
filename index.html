@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LiveChat Pro - Stream Overlay</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;700&family=Poppins:wght@400;600;700&family=Roboto:wght@400;500;700&family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+</head>
+<body class="bg-transparent">
+
+  <!-- CRT Scanlines Overlay FX (Optional) -->
+  <div id="crtOverlay" class="crt-overlay hidden"></div>
+
+  <!-- Main Container: Chat Column on Left, Settings Panel on Right -->
+  <div id="appContainer" class="overlay-container">
+    
+    <!-- Left: Chat Column -->
+    <div id="chatColumn" class="chat-column">
+      
+      <!-- Top Rectangular Bar (Height: 26px) -->
+      <header id="topBar" class="overlay-bar">
+        <div class="bar-left">
+          <span class="bar-icon">💬</span>
+          <span class="bar-title">LiveChat</span>
+          <span class="status-dot online" id="barStatusDot" title="Status: Online"></span>
+          <span class="bar-badge" id="barStreamBadge">0 streams</span>
+        </div>
+
+        <div class="bar-center">
+          <span class="bar-count" id="barMsgCount">0 msgs</span>
+        </div>
+
+        <div class="bar-right">
+          <!-- Lock Position Toggle -->
+          <button class="bar-btn btn-lock" id="barLockBtn" onclick="toggleLockPosition()" title="Kunci Posisi (Lock Orientation)">
+            <span id="lockIcon">🔓</span>
+          </button>
+
+          <!-- Pinned messages shortcut -->
+          <button class="bar-btn" id="barPinBtn" onclick="togglePinnedDrawer()" title="Lihat Pesan Tersemat">
+            📌 <span id="pinnedCount">0</span>
+          </button>
+
+          <!-- Setting button (opens settings side panel on the right) -->
+          <button class="bar-btn btn-settings" id="barSettingsBtn" onclick="toggleSettingsModal()" title="Buka Pengaturan di Kanan">
+            <span class="gear-icon">⚙️</span>
+            <span class="settings-text">Settings</span>
+          </button>
+
+          <!-- Frameless window controls -->
+          <button class="bar-btn btn-win-ctrl" onclick="minimizeAppWindow()" title="Minimize">─</button>
+          <button class="bar-btn btn-win-ctrl btn-close-app" onclick="closeAppWindow()" title="Tutup">✕</button>
+        </div>
+      </header>
+
+      <!-- Pinned Messages Drawer (Collapsible) -->
+      <div id="pinnedDrawer" class="pinned-drawer hidden">
+        <div class="pinned-header">
+          <span>📌 Pesan Tersemat (<span id="pinnedCountDrawer">0</span>)</span>
+          <div class="pinned-actions">
+            <button class="btn-micro" onclick="clearPinnedMessages()">Clear All</button>
+            <button class="btn-micro btn-close-drawer" onclick="togglePinnedDrawer()">✕</button>
+          </div>
+        </div>
+        <div id="pinnedContainer" class="pinned-list">
+          <div class="empty-pinned-msg">Belum ada pesan tersemat. Klik 📌 pada baris pesan untuk menyematkannya di sini.</div>
+        </div>
+      </div>
+
+      <!-- Livechat Feed (Transparan di bawah BAR) -->
+      <main class="chat-viewport-container">
+        <div id="chatFeed" class="chat-feed transparent-feed">
+          <!-- Chat bubbles rendered dynamically here -->
+        </div>
+
+        <!-- Float button to scroll to bottom -->
+        <button id="btnScrollBottom" class="scroll-bottom-btn hidden" onclick="scrollToBottom(true)">
+          ⬇ Pesan Baru di Bawah
+        </button>
+      </main>
+
+    </div>
+
+    <!-- Right: Settings Side Panel (Muncul di Kanan Chat agar Live Preview Terlihat) -->
+    <aside id="settingsPanel" class="settings-side-panel hidden">
+      
+      <!-- Panel Header -->
+      <div class="settings-header">
+        <div class="settings-title">
+          <span class="settings-icon">⚙️</span>
+          <span>Pengaturan LiveChat</span>
+        </div>
+        <button class="btn-close-modal" onclick="closeSettingsModal()" title="Tutup Pengaturan">✕</button>
+      </div>
+
+      <!-- Panel Navigation Tabs -->
+      <div class="settings-nav">
+        <button class="tab-btn active" id="tabNavStreams" onclick="switchSettingsTab('tabStreams')">📡 Stream</button>
+        <button class="tab-btn" id="tabNavDisplay" onclick="switchSettingsTab('tabDisplay')">🎨 Tampilan</button>
+        <button class="tab-btn" id="tabNavControls" onclick="switchSettingsTab('tabControls')">⚡ Kontrol</button>
+        <button class="tab-btn" id="tabNavFilter" onclick="switchSettingsTab('tabFilter')">🔍 Filter</button>
+        <button class="tab-btn" id="tabNavAbout" onclick="switchSettingsTab('tabAbout')">ℹ️ Info</button>
+      </div>
+
+      <!-- Panel Content Body -->
+      <div class="settings-body">
+        
+        <!-- Tab 1: Stream & Login Connection -->
+        <div id="tabStreams" class="tab-pane active">
+          
+          <!-- Akun Streamer (Auto-Connect & Auto-Detect) -->
+          <div class="section-box account-login-box">
+            <div class="section-header-split">
+              <h4 class="section-title">🔑 Akun Streamer (Auto-Connect)</h4>
+              <span class="badge-optional">Opsional</span>
+            </div>
+            <p class="section-desc">
+              Simpan akun Anda di bawah ini agar saat live streaming, LiveChat Pro <strong>otomatis terhubung</strong> tanpa perlu salin link atau ketik username setiap kali membuka aplikasi.
+            </p>
+
+            <div class="auto-connect-toggle-bar">
+              <label class="switch-row">
+                <input type="checkbox" id="chkAutoConnectStreams" checked onchange="toggleAutoConnectSetting(this.checked)">
+                <span class="switch-title">⚡ Otomatis sambungkan akun saat aplikasi dibuka</span>
+              </label>
+            </div>
+
+            <div class="account-cards-grid">
+              
+              <!-- Twitch Account Card -->
+              <div class="account-card" id="accCardTwitch">
+                <div class="acc-card-top">
+                  <span class="acc-logo tw">👾 Twitch</span>
+                  <span class="acc-status-badge" id="accTwitchStatus">Belum Disimpan</span>
+                </div>
+                <div class="acc-user-display" id="accTwitchUser">Tidak ada akun tersimpan</div>
+                <div class="acc-actions">
+                  <button class="btn-action tw-btn" onclick="openLoginModal('twitch')">
+                    <span id="accTwitchBtnText">🔑 Login / Simpan</span>
+                  </button>
+                  <button class="btn-micro danger hidden" id="accTwitchLogout" onclick="logoutAccount('twitch')">Hapus</button>
+                </div>
+              </div>
+
+              <!-- YouTube Account Card -->
+              <div class="account-card" id="accCardYouTube">
+                <div class="acc-card-top">
+                  <span class="acc-logo yt">▶ YouTube</span>
+                  <span class="acc-status-badge" id="accYtStatus">Belum Disimpan</span>
+                </div>
+                <div class="acc-user-display" id="accYtUser">Tidak ada channel tersimpan</div>
+                <div class="acc-actions">
+                  <button class="btn-action yt-btn" onclick="openLoginModal('youtube')">
+                    <span id="accYtBtnText">🔑 Login / Simpan</span>
+                  </button>
+                  <button class="btn-micro danger hidden" id="accYtLogout" onclick="logoutAccount('youtube')">Hapus</button>
+                </div>
+              </div>
+
+              <!-- TikTok Account Card -->
+              <div class="account-card" id="accCardTikTok">
+                <div class="acc-card-top">
+                  <span class="acc-logo tt">🎵 TikTok</span>
+                  <span class="acc-status-badge" id="accTikTokStatus">Belum Disimpan</span>
+                </div>
+                <div class="acc-user-display" id="accTikTokUser">Tidak ada akun tersimpan</div>
+                <div class="acc-actions">
+                  <button class="btn-action tt-btn" onclick="openLoginModal('tiktok')">
+                    <span id="accTikTokBtnText">🔑 Login / Simpan</span>
+                  </button>
+                  <button class="btn-micro danger hidden" id="accTikTokLogout" onclick="logoutAccount('tiktok')">Hapus</button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Divider between Auto-Connect and Manual -->
+          <div class="section-separator">
+            <span>Atau Hubungkan Manual (Link & Username)</span>
+          </div>
+
+          <!-- Twitch Connection Card -->
+          <div class="platform-card card-twitch">
+            <div class="platform-header">
+              <span class="platform-badge-logo tw">👾 Twitch</span>
+              <span class="platform-status-pill" id="twitchStatusPill">Siap Connect</span>
+            </div>
+            <div class="platform-guide">
+              <strong>Cara Menghubungkan Twitch Chat:</strong>
+              <p>Cukup masukkan nama channel Twitch streamer yang sedang live (atau channel Anda sendiri). Terhubung langsung secara real-time via Twitch IRC WebSocket tanpa API key rumit.</p>
+            </div>
+            <div class="platform-input-row">
+              <input type="text" id="twitchChannelInput" class="form-input" 
+                     placeholder="contoh: shroud atau channelname" 
+                     onkeypress="if(event.key==='Enter') connectTwitchFromCard()">
+              <button class="btn-action tw-btn" onclick="connectTwitchFromCard()">
+                <span>👾 Hubungkan</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- YouTube Connection Card -->
+          <div class="platform-card card-youtube">
+            <div class="platform-header">
+              <span class="platform-badge-logo yt">▶ YouTube Live</span>
+              <span class="platform-status-pill" id="ytStatusPill">Siap Connect</span>
+            </div>
+            <div class="platform-guide">
+              <strong>Cara Menghubungkan YouTube Live Chat:</strong>
+              <ol class="guide-steps">
+                <li>Buka live stream Anda di YouTube Studio atau tonton video live YouTube.</li>
+                <li>Salin link video atau popout chat (misal: <code>youtube.com/watch?v=...</code> atau <code>youtube.com/live/...</code>).</li>
+                <li>Tempelkan ke kolom di bawah, lalu klik <strong>Hubungkan</strong>.</li>
+              </ol>
+            </div>
+            <div class="platform-input-row">
+              <input type="text" id="youtubeUrlInput" class="form-input" 
+                     placeholder="https://www.youtube.com/watch?v=..." 
+                     onkeypress="if(event.key==='Enter') connectYtFromCard()">
+              <button class="btn-action yt-btn" onclick="connectYtFromCard()">
+                <span>▶ Hubungkan</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- TikTok Connection Card -->
+          <div class="platform-card card-tiktok">
+            <div class="platform-header">
+              <span class="platform-badge-logo tt">🎵 TikTok Live</span>
+              <span class="platform-status-pill" id="tiktokStatusPill">Siap Connect</span>
+            </div>
+            <div class="platform-guide">
+              <strong>Cara Menghubungkan TikTok Live Chat:</strong>
+              <p>Pastikan akun TikTok Anda sedang LIVE publik. Masukkan username TikTok (contoh: <code>@streamername</code>) untuk menghubungkan chat komentar live.</p>
+            </div>
+            <div class="platform-input-row">
+              <input type="text" id="tiktokUsernameInput" class="form-input" 
+                     placeholder="@username (sedang LIVE)" 
+                     onkeypress="if(event.key==='Enter') connectTikTokFromCard()">
+              <button class="btn-action tt-btn" onclick="connectTikTokFromCard()">
+                <span>🎵 Hubungkan</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Quick URL Connector & Active Streams -->
+          <div class="section-box">
+            <h4 class="section-title">URL Langsung / Auto-Detect</h4>
+            <div class="input-form-group">
+              <input type="text" id="streamUrlInput" class="form-input" 
+                     placeholder="Tempel URL YouTube / Twitch apa saja..." 
+                     onkeypress="handleUrlKeyPress(event)">
+              <div class="form-row">
+                <select id="platformSelect" class="form-select">
+                  <option value="auto">Auto-Detect Platform</option>
+                  <option value="youtube">YouTube Live</option>
+                  <option value="twitch">Twitch Stream</option>
+                </select>
+                <button class="btn-action primary" onclick="connectFromInput()">
+                  <span>🔌 Connect</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-box">
+            <div class="section-header-split">
+              <h4 class="section-title">Stream Aktif</h4>
+              <button class="btn-chip danger" onclick="disconnectAllStreams()">Putuskan Semua</button>
+            </div>
+            <div id="connectedStreamsContainer" class="stream-chips-container">
+              <span class="no-streams-notice">Tidak ada stream aktif. Hubungkan live chat melalui form di atas.</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Tab 2: Tampilan & Warna (Live Customization!) -->
+        <div id="tabDisplay" class="tab-pane">
+          
+          <!-- Background Customization (Default Transparan) -->
+          <div class="section-box">
+            <h4 class="section-title">Latar Belakang Window (Background)</h4>
+            <p class="section-desc">Otomatis default transparan. Anda juga bisa memilih warna khusus dengan Color Picker.</p>
+            
+            <div class="theme-buttons-grid">
+              <button class="theme-btn active" id="themeBtnClear" onclick="applyPresetBackground('transparent')">
+                <span class="theme-preview clear-preview"></span>
+                <span>Transparan (Default)</span>
+              </button>
+              <button class="theme-btn" id="themeBtnGlass" onclick="applyPresetBackground('glass')">
+                <span class="theme-preview glass-preview"></span>
+                <span>Kaca Gelap (35%)</span>
+              </button>
+              <button class="theme-btn" id="themeBtnSolid" onclick="applyPresetBackground('solid')">
+                <span class="theme-preview solid-preview"></span>
+                <span>Hitam Pekat</span>
+              </button>
+              <button class="theme-btn" id="themeBtnGreen" onclick="applyPresetBackground('green')">
+                <span class="theme-preview green-preview"></span>
+                <span>OBS Green Screen</span>
+              </button>
+            </div>
+
+            <!-- Custom Color Picker Background -->
+            <div class="custom-color-row">
+              <div class="color-picker-group">
+                <label for="bgColorPicker">Pilih Warna Background:</label>
+                <div class="picker-wrapper">
+                  <input type="color" id="bgColorPicker" value="#000000" onchange="onCustomBgColorChange(this.value)">
+                  <span id="bgColorHex" class="color-hex-text">#000000</span>
+                </div>
+              </div>
+
+              <div class="slider-group">
+                <div class="slider-header">
+                  <span>Opasitas Background:</span>
+                  <strong id="bgOpacityVal">0%</strong>
+                </div>
+                <input type="range" id="bgOpacitySlider" class="form-range" min="0" max="100" value="0" 
+                       oninput="onBgOpacityChange(this.value)">
+              </div>
+            </div>
+          </div>
+
+          <!-- Bubble Chat Customization -->
+          <div class="section-box">
+            <h4 class="section-title">Warna & Desain Bubble Chat</h4>
+            <p class="section-desc">Sesuaikan warna latar bubble, opasitas, dan garis tepi.</p>
+            
+            <!-- Bubble Background Color & Opacity -->
+            <div class="color-picker-group">
+              <label for="bubbleBgColorPicker">Warna Latar Bubble:</label>
+              <div class="picker-wrapper">
+                <input type="color" id="bubbleBgColorPicker" value="#0e121a" onchange="onBubbleBgColorChange(this.value)">
+                <span id="bubbleBgHex" class="color-hex-text">#0e121a</span>
+              </div>
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-header">
+                <span>Opasitas Bubble:</span>
+                <strong id="bubbleOpacityVal">78%</strong>
+              </div>
+              <input type="range" id="bubbleOpacitySlider" class="form-range" min="0" max="100" value="78" 
+                     oninput="onBubbleOpacityChange(this.value)">
+            </div>
+
+            <!-- Bubble Border -->
+            <div class="setting-toggle-row">
+              <div>
+                <strong>Border / Garis Tepi Bubble</strong>
+                <p class="setting-hint">Tampilkan outline halus pada tiap bubble</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkBubbleBorder" checked onchange="onBubbleBorderToggle(this.checked)">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="color-picker-group" id="bubbleBorderPickerGroup">
+              <label for="bubbleBorderColorPicker">Warna Border:</label>
+              <div class="picker-wrapper">
+                <input type="color" id="bubbleBorderColorPicker" value="#ffffff" onchange="onBubbleBorderColorChange(this.value)">
+                <span id="bubbleBorderHex" class="color-hex-text">#ffffff</span>
+              </div>
+            </div>
+
+            <!-- Bubble Shape / Border Radius -->
+            <div class="slider-group">
+              <div class="slider-header">
+                <span>Lengkungan Sudut Bubble:</span>
+                <strong id="bubbleRadiusVal">12px</strong>
+              </div>
+              <input type="range" id="bubbleRadiusSlider" class="form-range" min="0" max="24" value="12" 
+                     oninput="onBubbleRadiusChange(this.value)">
+            </div>
+
+            <!-- Bubble Padding -->
+            <div class="slider-group">
+              <div class="slider-header">
+                <span>Ketebalan / Padding Bubble:</span>
+                <strong id="bubblePaddingVal">Sedang</strong>
+              </div>
+              <input type="range" id="bubblePaddingSlider" class="form-range" min="2" max="10" value="5" 
+                     oninput="onBubblePaddingChange(this.value)">
+            </div>
+
+            <!-- Bubble Gap -->
+            <div class="slider-group">
+              <div class="slider-header">
+                <span>Jarak Antar Bubble (Gap):</span>
+                <strong id="bubbleGapVal">5px</strong>
+              </div>
+              <input type="range" id="bubbleGapSlider" class="form-range" min="2" max="14" value="5" 
+                     oninput="onBubbleGapChange(this.value)">
+            </div>
+
+          </div>
+
+          <!-- Typography & Text Customization -->
+          <div class="section-box">
+            <h4 class="section-title">Font & Ukuran Teks</h4>
+
+            <!-- Font Family -->
+            <div class="font-select-group">
+              <label for="fontSelect">Jenis Font:</label>
+              <select id="fontSelect" class="form-select" onchange="onFontFamilyChange(this.value)">
+                <option value="'Inter', sans-serif">Inter (Modern & Bersih - Rekomendasi)</option>
+                <option value="'Poppins', sans-serif">Poppins (Rounded Modern)</option>
+                <option value="'Outfit', sans-serif">Outfit (Futuristic Streamer)</option>
+                <option value="'Roboto', sans-serif">Roboto (Neutral Sans)</option>
+                <option value="'Share Tech Mono', monospace">Share Tech Mono (Cyber Monospace)</option>
+                <option value="'VT323', monospace">VT323 (Retro 8-bit Pixel)</option>
+                <option value="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">System UI (Segoe UI)</option>
+              </select>
+            </div>
+
+            <!-- Font Size Slider -->
+            <div class="slider-group">
+              <div class="slider-header">
+                <span>Ukuran Teks Chat:</span>
+                <strong id="fontSizeVal">14px</strong>
+              </div>
+              <input type="range" id="fontSizeSlider" class="form-range" min="11" max="24" value="14" 
+                     oninput="onFontSizeChange(this.value)">
+            </div>
+
+            <!-- Chat Text Color -->
+            <div class="color-picker-group">
+              <label for="chatTextColorPicker">Warna Teks Chat:</label>
+              <div class="picker-wrapper">
+                <input type="color" id="chatTextColorPicker" value="#ffffff" onchange="onChatTextColorChange(this.value)">
+                <span id="chatTextHex" class="color-hex-text">#ffffff</span>
+              </div>
+            </div>
+
+            <!-- Effects -->
+            <div class="setting-toggle-row">
+              <div>
+                <strong>Efek Garis Layar CRT (Scanlines)</strong>
+                <p class="setting-hint">Nuansa retro TV scanlines</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkScanlines" onchange="toggleScanlines()">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="setting-toggle-row">
+              <div>
+                <strong>High-Contrast Mode</strong>
+                <p class="setting-hint">Teks tebal kontras maksimal</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkContrast" onchange="toggleContrast()">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <button class="btn-action secondary full-width mt-2" onclick="resetDefaultAppearance()">
+              🔄 Reset Pengaturan Tampilan ke Default
+            </button>
+
+          </div>
+
+        </div>
+
+        <!-- Tab 3: Controls & Feed -->
+        <div id="tabControls" class="tab-pane">
+          <div class="section-box">
+            <h4 class="section-title">Posisi & Overlay Window</h4>
+            
+            <div class="setting-toggle-row">
+              <div>
+                <strong>Kunci Posisi (Lock Orientation)</strong>
+                <p class="setting-hint">Kunci posisi agar jendela tidak dapat digeser atau berpindah</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkLockPosition" onchange="toggleLockPosition(this.checked)">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="setting-toggle-row">
+              <div>
+                <strong>Selalu di Paling Depan (Always on Top)</strong>
+                <p class="setting-hint">Tetap terlihat di depan layar saat pindah screen / ALT+TAB</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkAlwaysOnTop" checked onchange="toggleAlwaysOnTop(this.checked)">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="section-box">
+            <h4 class="section-title">Opsi Feed & Suara</h4>
+            
+            <div class="setting-toggle-row">
+              <div>
+                <strong>Simulasi Test Feed</strong>
+                <p class="setting-hint">Generate pesan acak YouTube & Twitch untuk uji coba</p>
+              </div>
+              <button class="btn-action" id="btnTestToggle" onclick="toggleTestMode()">
+                ⚡ Test Mode: <strong id="testModeStatus">OFF</strong>
+              </button>
+            </div>
+
+            <div class="setting-toggle-row">
+              <div>
+                <strong>Efek Suara Retro (Audio Beep)</strong>
+                <p class="setting-hint">Bunyi klik dan notifikasi pesan masuk</p>
+              </div>
+              <button class="btn-action" id="btnSoundToggle" onclick="toggleSound()">
+                <span id="soundIcon">🔊</span> Sound: ON
+              </button>
+            </div>
+
+            <div class="setting-toggle-row">
+              <div>
+                <strong>Auto-Scroll Pesan</strong>
+                <p class="setting-hint">Otomatis menggulir ke pesan chat terbaru</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkAutoScroll" checked onchange="toggleAutoScroll(this.checked)">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="section-box">
+            <h4 class="section-title">Manajemen Data Chat</h4>
+            <div class="actions-buttons-grid">
+              <button class="btn-action danger" onclick="clearAllChat()">
+                🗑 Bersihkan Semua Chat
+              </button>
+              <button class="btn-action" onclick="exportChatLog()">
+                💾 Ekspor Chat Log (.txt)
+              </button>
+              <button class="btn-action" onclick="togglePinnedDrawer(); closeSettingsModal();">
+                📌 Kelola Pesan Tersemat
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 4: Filter & Search -->
+        <div id="tabFilter" class="tab-pane">
+          <div class="section-box">
+            <div class="section-header-split">
+              <h4 class="section-title">Filter Platform</h4>
+              <div class="quick-filter-btns">
+                <button class="btn-micro" onclick="setFilter('all')">Semua</button>
+                <button class="btn-micro" onclick="setFilter('yt')">YT</button>
+                <button class="btn-micro" onclick="setFilter('tw')">TW</button>
+                <button class="btn-micro" onclick="setFilter('tt')">TT</button>
+              </div>
+            </div>
+            <div class="filters-grid">
+              <label class="filter-card">
+                <input type="checkbox" id="chkFilterYt" checked onchange="applyFilters()">
+                <span class="badge-yt">[YT]</span>
+                <span>Tampilkan YouTube Chat</span>
+              </label>
+              <label class="filter-card">
+                <input type="checkbox" id="chkFilterTw" checked onchange="applyFilters()">
+                <span class="badge-tw">[TW]</span>
+                <span>Tampilkan Twitch Chat</span>
+              </label>
+              <label class="filter-card">
+                <input type="checkbox" id="chkFilterTt" checked onchange="applyFilters()">
+                <span class="badge-tt">[TT]</span>
+                <span>Tampilkan TikTok Chat</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="section-box">
+            <h4 class="section-title">Cari Kata Kunci dalam Chat</h4>
+            <input type="text" id="chatSearchInput" class="form-input" 
+                   placeholder="Ketik kata kunci untuk menyaring pesan..." oninput="handleSearch()">
+          </div>
+        </div>
+
+        <!-- Tab 5: Info & Status -->
+        <div id="tabAbout" class="tab-pane">
+          <div class="section-box">
+            <h4 class="section-title">Status Sistem</h4>
+            <div class="status-summary-grid">
+              <div class="status-card">
+                <span class="card-label">Koneksi</span>
+                <span class="card-val" id="statusMessage">Online</span>
+              </div>
+              <div class="status-card">
+                <span class="card-label">Total Pesan</span>
+                <span class="card-val" id="statusMsgCount">0</span>
+              </div>
+              <div class="status-card">
+                <span class="card-label">Kecepatan</span>
+                <span class="card-val" id="statusRate">0.0 msg/s</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-box">
+            <h4 class="section-title">Panduan Ringkas Format URL</h4>
+            <ul class="info-list">
+              <li><strong>Twitch:</strong> Ketik nama channel langsung atau buka tab Stream di atas.</li>
+              <li><strong>YouTube:</strong> Buka video live YouTube ➜ Salin URL video (`watch?v=...`) ➜ Hubungkan.</li>
+              <li><strong>TikTok:</strong> Masukkan `@username` yang sedang siaran langsung.</li>
+            </ul>
+          </div>
+
+          <div class="section-box about-footer">
+            <strong>LiveChat Pro Overlay v2.0</strong>
+            <p>Multi-Platform Live Stream Chat Aggregator dengan Live Side-Panel Customizer.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Hidden fallbacks for legacy references in JS -->
+      <span id="win95Clock" style="display:none;"></span>
+      <span id="taskbarClock" style="display:none;"></span>
+      <span id="menuTestCheck" style="display:none;"></span>
+      <span id="menuSoundCheck" style="display:none;"></span>
+      <span id="menuScanCheck" style="display:none;"></span>
+      <span id="menuContrastCheck" style="display:none;"></span>
+      <span id="menuCompactCheck" style="display:none;"></span>
+      <span id="menuAutoScrollCheck" style="display:none;"></span>
+
+    </aside>
+
+  <!-- Modal Dialog: Login / Simpan Akun Streamer -->
+  <div id="accountLoginModal" class="modal-backdrop hidden">
+    <div class="modal-window login-modal-box">
+      <div class="modal-header">
+        <span class="modal-title" id="loginModalTitle">🔑 Simpan Akun Streamer</span>
+        <button class="bar-btn" onclick="closeLoginModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="login-instruction" id="loginModalDesc">
+          Masukkan informasi akun streaming Anda agar aplikasi dapat mengenali dan otomatis menghubungkan chat saat live.
+        </p>
+        
+        <div class="login-field-group">
+          <label class="login-field-label" id="loginFieldLabel">Username / Channel:</label>
+          <input type="text" id="loginModalInput" class="form-input" 
+                 placeholder="contoh: username" 
+                 onkeypress="if(event.key==='Enter') saveAccountFromModal()">
+        </div>
+
+        <div class="login-tips" id="loginModalTip">
+          💡 Tips: Aplikasi akan otomatis mendeteksi ketika akun ini mulai melakukan siaran langsung.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-action" onclick="closeLoginModal()">Batal</button>
+        <button class="btn-action primary" onclick="saveAccountFromModal()">💾 Simpan & Sambungkan</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
