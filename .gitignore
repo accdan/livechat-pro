@@ -3,6 +3,10 @@ node_modules/
 
 # Production & portable builds
 dist/
+build-output/
+scratch/
+tmp_asar/
+*.jsc
 
 # Logs
 *.log

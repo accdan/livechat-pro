@@ -14,6 +14,25 @@ try {
   console.warn("Electron IPC not available in this environment:", e);
 }
 
+// --- Anti-Tamper & DevTools Shortcut Interceptor ---
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', (e) => {
+    const isDevToolsKey = e.key === 'F12' || 
+      (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) ||
+      (e.ctrlKey && (e.key === 'u' || e.key === 'U'));
+    if (isDevToolsKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (electronIpc) {
+        electronIpc.send('tamper-detected');
+      }
+    }
+  }, true);
+  window.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+  }, true);
+}
+
 // --- Application State ---
 const state = {
   messages: [],
@@ -41,11 +60,17 @@ const state = {
     bubbleBgColor: '#0e121a',
     bubbleOpacity: 78,
     bubbleRadius: 12,
-    bubblePadding: 5,
+    bubblePadY: 5,
+    bubblePadX: 11,
     bubbleGap: 5,
     bubbleBorder: true,
     bubbleBorderColor: '#ffffff',
-    bubbleBorderOpacity: 16
+    bubbleBorderWidth: 1,
+    bubbleShadow: 'deep',
+    showTimestamp: true,
+    showBadges: true,
+    boldUsername: true,
+    animationType: 'slide-up'
   },
   filters: {
     yt: true,
@@ -262,6 +287,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         addSystemMessage(`🔴 [TikTok] Siaran @${data.username} berakhir / standby.`);
       }
+    });
+
+    // Sync from standalone Live Donation Window
+    electronIpc.on('leaderboard-update', (event, lb) => {
+      if (Array.isArray(lb)) {
+        state.leaderboard = lb;
+        renderLeaderboard();
+        renderFdwLeaderboard();
+      }
+    });
+
+    electronIpc.on('donation-event', (event, data) => {
+      showDonationAlert(data);
+    });
+
+    electronIpc.on('medser-event', (event, data) => {
+      showMedserAlert(data);
     });
   }
 
@@ -1502,6 +1544,23 @@ function toggleAutoScroll(val) {
 }
 
 // --- Appearance Live Customization Engine ---
+const SHADOW_PRESETS = {
+  'none': 'none',
+  'soft': '0 2px 8px rgba(0, 0, 0, 0.35)',
+  'deep': '0 4px 14px rgba(0, 0, 0, 0.65)',
+  'glow-white': '0 0 12px rgba(255, 255, 255, 0.4), 0 4px 12px rgba(0, 0, 0, 0.6)',
+  'glow-cyan': '0 0 14px rgba(6, 182, 212, 0.6), 0 4px 12px rgba(0, 0, 0, 0.7)',
+  'glow-purple': '0 0 14px rgba(168, 85, 247, 0.6), 0 4px 12px rgba(0, 0, 0, 0.7)',
+  'retro-drop': '3px 3px 0px rgba(0, 0, 0, 0.95)'
+};
+
+const ANIMATION_PRESETS = {
+  'slide-up': 'slideUpMsg 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+  'pop-in': 'popInMsg 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+  'fade-in': 'fadeInMsg 0.2s ease-out',
+  'instant': 'none'
+};
+
 function hexToRgba(hex, alphaPercent) {
   let c = hex.replace('#', '');
   if (c.length === 3) {
@@ -1596,11 +1655,19 @@ function updateBackgroundStyle() {
   }
 }
 
-function onBubbleBgColorChange(hex) {
+function onBubbleColorChange(hex) {
   state.appearance.bubbleBgColor = hex;
-  const hexLabel = document.getElementById('bubbleBgHex');
+  const hexLabel = document.getElementById('bubbleColorHex');
   if (hexLabel) hexLabel.textContent = hex;
   updateBubbleStyle();
+  saveAppearanceSettings();
+}
+
+function onBubbleTextColorChange(hex) {
+  state.appearance.chatTextColor = hex;
+  const hexLabel = document.getElementById('bubbleTextColorHex');
+  if (hexLabel) hexLabel.textContent = hex;
+  document.documentElement.style.setProperty('--chat-text-color', hex);
   saveAppearanceSettings();
 }
 
@@ -1612,40 +1679,29 @@ function onBubbleOpacityChange(val) {
   saveAppearanceSettings();
 }
 
-function onBubbleBorderToggle(checked) {
-  state.appearance.bubbleBorder = checked;
-  const group = document.getElementById('bubbleBorderPickerGroup');
-  if (group) group.style.display = checked ? 'flex' : 'none';
-  updateBubbleStyle();
-  saveAppearanceSettings();
-}
-
-function onBubbleBorderColorChange(hex) {
-  state.appearance.bubbleBorderColor = hex;
-  const hexLabel = document.getElementById('bubbleBorderHex');
-  if (hexLabel) hexLabel.textContent = hex;
-  updateBubbleStyle();
-  saveAppearanceSettings();
-}
-
 function onBubbleRadiusChange(val) {
-  state.appearance.bubbleRadius = parseInt(val, 10);
+  const r = parseInt(val, 10);
+  state.appearance.bubbleRadius = r;
   const valLabel = document.getElementById('bubbleRadiusVal');
-  if (valLabel) valLabel.textContent = `${val}px`;
-  document.documentElement.style.setProperty('--bubble-border-radius', `${val}px`);
+  if (valLabel) valLabel.textContent = `${r}px`;
+  document.documentElement.style.setProperty('--bubble-border-radius', `${r}px`);
   saveAppearanceSettings();
 }
 
-function onBubblePaddingChange(val) {
-  const p = parseInt(val, 10);
-  state.appearance.bubblePadding = p;
-  const valLabel = document.getElementById('bubblePaddingVal');
-  if (valLabel) {
-    valLabel.textContent = p <= 3 ? 'Rapat' : (p <= 6 ? 'Sedang' : 'Longgar');
-  }
-  const py = p;
-  const px = Math.round(p * 2.2);
+function onBubblePadYChange(val) {
+  const py = parseInt(val, 10);
+  state.appearance.bubblePadY = py;
+  const valLabel = document.getElementById('bubblePadYVal');
+  if (valLabel) valLabel.textContent = `${py}px`;
   document.documentElement.style.setProperty('--bubble-padding-y', `${py}px`);
+  saveAppearanceSettings();
+}
+
+function onBubblePadXChange(val) {
+  const px = parseInt(val, 10);
+  state.appearance.bubblePadX = px;
+  const valLabel = document.getElementById('bubblePadXVal');
+  if (valLabel) valLabel.textContent = `${px}px`;
   document.documentElement.style.setProperty('--bubble-padding-x', `${px}px`);
   saveAppearanceSettings();
 }
@@ -1658,6 +1714,336 @@ function onBubbleGapChange(val) {
   document.documentElement.style.setProperty('--bubble-gap', `${g}px`);
   saveAppearanceSettings();
 }
+
+function onBubbleBorderToggle(checked) {
+  state.appearance.bubbleBorder = checked;
+  const colorRow = document.getElementById('bubbleBorderColorRow');
+  const widthRow = document.getElementById('bubbleBorderWidthRow');
+  if (colorRow) colorRow.style.display = checked ? 'flex' : 'none';
+  if (widthRow) widthRow.style.display = checked ? 'flex' : 'none';
+  updateBubbleStyle();
+  saveAppearanceSettings();
+}
+
+function onBubbleBorderColorChange(hex) {
+  state.appearance.bubbleBorderColor = hex;
+  const hexLabel = document.getElementById('bubbleBorderHex');
+  if (hexLabel) hexLabel.textContent = hex;
+  updateBubbleStyle();
+  saveAppearanceSettings();
+}
+
+function onBubbleBorderWidthChange(val) {
+  const w = parseInt(val, 10);
+  state.appearance.bubbleBorderWidth = w;
+  const valLabel = document.getElementById('bubbleBorderWidthVal');
+  if (valLabel) valLabel.textContent = `${w}px`;
+  updateBubbleStyle();
+  saveAppearanceSettings();
+}
+
+function onBubbleShadowChange(val) {
+  state.appearance.bubbleShadow = val;
+  const shadowVal = SHADOW_PRESETS[val] || SHADOW_PRESETS.deep;
+  document.documentElement.style.setProperty('--bubble-shadow', shadowVal);
+  saveAppearanceSettings();
+}
+
+function toggleTimestampDisplay(checked) {
+  state.appearance.showTimestamp = checked;
+  const feed = document.getElementById('chatFeed');
+  if (feed) feed.classList.toggle('hide-timestamps', !checked);
+  saveAppearanceSettings();
+}
+
+function toggleBadgeDisplay(checked) {
+  state.appearance.showBadges = checked;
+  const feed = document.getElementById('chatFeed');
+  if (feed) feed.classList.toggle('hide-badges', !checked);
+  saveAppearanceSettings();
+}
+
+function toggleBoldUsername(checked) {
+  state.appearance.boldUsername = checked;
+  const feed = document.getElementById('chatFeed');
+  if (feed) feed.classList.toggle('normal-username', !checked);
+  saveAppearanceSettings();
+}
+
+function onAnimationChange(val) {
+  state.appearance.animationType = val;
+  const animVal = ANIMATION_PRESETS[val] || ANIMATION_PRESETS['slide-up'];
+  document.documentElement.style.setProperty('--bubble-anim', animVal);
+  saveAppearanceSettings();
+}
+
+// =========================================================================
+// Floating Donation Window (Independent, Resizable, Multi-Tab)
+// =========================================================================
+let isFdwLocked = false;
+let currentFdwTab = 'overlay';
+
+function openFloatingDonationWindow(tab = 'overlay') {
+  playRetroSound('click');
+  // In Electron desktop app, open the standalone detached window (movable anywhere across screens)
+  if (electronIpc) {
+    electronIpc.send('open-donation-window', tab);
+    return;
+  }
+  // Fallback in web browser mode
+  const win = document.getElementById('floatingDonationWindow');
+  if (!win) return;
+  win.classList.remove('hidden');
+  switchFdwTab(tab);
+}
+
+function closeFloatingDonationWindow() {
+  playRetroSound('click');
+  if (electronIpc) {
+    electronIpc.send('close-donation-window');
+  }
+  const win = document.getElementById('floatingDonationWindow');
+  if (win) win.classList.add('hidden');
+}
+
+function toggleFloatingDonationWindow(tab = 'overlay') {
+  playRetroSound('click');
+  if (electronIpc) {
+    electronIpc.send('toggle-donation-window', tab);
+    return;
+  }
+  const win = document.getElementById('floatingDonationWindow');
+  if (win) {
+    win.classList.toggle('hidden');
+    if (!win.classList.contains('hidden')) switchFdwTab(tab);
+  }
+}
+
+function switchFdwTab(tabName) {
+  playRetroSound('click');
+  currentFdwTab = tabName;
+
+  const tabs = ['overlay', 'leaderboard', 'mediashare'];
+  tabs.forEach(t => {
+    const btn = document.getElementById(`fdwTabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
+    const pane = document.getElementById(`fdwPane${t.charAt(0).toUpperCase() + t.slice(1)}`);
+    if (btn) btn.classList.toggle('active', t === tabName);
+    if (pane) pane.classList.toggle('active', t === tabName);
+  });
+
+  if (tabName === 'overlay') {
+    updateFdwIframe();
+  } else if (tabName === 'leaderboard') {
+    renderFdwLeaderboard();
+  }
+}
+
+function toggleFdwLock(forceVal) {
+  playRetroSound('click');
+  if (typeof forceVal === 'boolean') {
+    isFdwLocked = forceVal;
+  } else {
+    isFdwLocked = !isFdwLocked;
+  }
+
+  const win = document.getElementById('floatingDonationWindow');
+  const lockBtn = document.getElementById('fdwLockBtn');
+  const lockShackle = document.getElementById('fdwLockShackle');
+  const lockSettingsBtn = document.getElementById('lockDonationAlert');
+
+  if (win) win.classList.toggle('locked', isFdwLocked);
+  if (lockBtn) {
+    lockBtn.classList.toggle('locked', isFdwLocked);
+    lockBtn.title = isFdwLocked ? 'Posisi Terkunci (Klik untuk buka)' : 'Kunci Posisi';
+  }
+  if (lockShackle) {
+    lockShackle.setAttribute('d', isFdwLocked ? 'M7 11V7a5 5 0 0 1 10 0v4' : 'M7 11V7a5 5 0 0 1 9.9-1');
+  }
+  if (lockSettingsBtn) {
+    lockSettingsBtn.classList.toggle('active', isFdwLocked);
+  }
+
+  addSystemMessage(isFdwLocked ? '🔒 Jendela mengambang donasi dikunci.' : '🔓 Jendela mengambang donasi dibuka.');
+}
+
+function reloadCurrentFdwTab() {
+  playRetroSound('click');
+  if (currentFdwTab === 'overlay') {
+    reloadFdwIframe();
+  } else if (currentFdwTab === 'leaderboard') {
+    renderFdwLeaderboard();
+  } else {
+    triggerTestMedserAlert();
+  }
+}
+
+function onFdwSourceSelectChanged() {
+  updateFdwIframe();
+}
+
+function updateFdwIframe() {
+  const iframe = document.getElementById('fdwOverlayIframe');
+  const placeholder = document.getElementById('fdwOverlayPlaceholder');
+  const select = document.getElementById('fdwOverlaySourceSelect');
+  if (!iframe) return;
+
+  const choice = select ? select.value : 'auto';
+  let targetUrl = '';
+
+  if (choice === 'tako') {
+    targetUrl = state.donations.takoUrl;
+  } else if (choice === 'saweria') {
+    targetUrl = state.donations.saweriaUrl;
+  } else if (choice === 'custom') {
+    targetUrl = state.donations.customUrl;
+  } else {
+    // auto: pick first configured valid url
+    targetUrl = state.donations.takoUrl || state.donations.saweriaUrl || state.donations.customUrl || '';
+  }
+
+  if (targetUrl && isValidHttpUrl(targetUrl)) {
+    if (iframe.getAttribute('data-src') !== targetUrl) {
+      iframe.src = targetUrl;
+      iframe.setAttribute('data-src', targetUrl);
+    }
+    iframe.classList.remove('hidden');
+    if (placeholder) placeholder.classList.add('hidden');
+  } else {
+    iframe.src = 'about:blank';
+    iframe.removeAttribute('data-src');
+    iframe.classList.add('hidden');
+    if (placeholder) placeholder.classList.remove('hidden');
+  }
+}
+
+function reloadFdwIframe() {
+  playRetroSound('click');
+  const iframe = document.getElementById('fdwOverlayIframe');
+  if (!iframe) return;
+  const currentSrc = iframe.getAttribute('data-src');
+  if (currentSrc && isValidHttpUrl(currentSrc)) {
+    const ts = Date.now();
+    const conn = currentSrc.includes('?') ? '&' : '?';
+    iframe.src = `${currentSrc}${conn}_reload=${ts}`;
+    addSystemMessage('🔄 Iframe overlay donasi dimuat ulang.');
+  } else {
+    updateFdwIframe();
+  }
+}
+
+function renderFdwLeaderboard() {
+  const container = document.getElementById('fdwLeaderboardList');
+  if (!container) return;
+
+  if (!state.leaderboard || state.leaderboard.length === 0) {
+    container.innerHTML = `<div class="fdw-empty-text">Belum ada donasi tercatat sesi ini.<br><span style="font-size:9.5px;color:#94a3b8;">Klik "Test Donasi" untuk mencoba.</span></div>`;
+    return;
+  }
+
+  const medals = ['🥇', '🥈', '🥉'];
+  container.innerHTML = state.leaderboard.map((item, idx) => {
+    const rankBadge = medals[idx] || `#${idx + 1}`;
+    return `
+      <div class="fdw-lb-row">
+        <div class="fdw-lb-left">
+          <span class="fdw-lb-rank">${rankBadge}</span>
+          <span class="fdw-lb-donor">${escapeHtml(item.donor)}</span>
+        </div>
+        <span class="fdw-lb-total">${escapeHtml(item.displayTotal || item.amount || '')}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+// Drag & Move logic for Floating Window
+function initFdwDrag() {
+  const handle = document.getElementById('fdwDragHandle');
+  const win = document.getElementById('floatingDonationWindow');
+  if (!handle || !win || handle.dataset.dragInit) return;
+  handle.dataset.dragInit = 'true';
+
+  let isDragging = false;
+  let startX = 0, startY = 0;
+  let initialLeft = 0, initialTop = 0;
+
+  handle.addEventListener('mousedown', (e) => {
+    if (isFdwLocked) return;
+    if (e.target.closest('button') || e.target.closest('select') || e.target.closest('input')) return;
+
+    isDragging = true;
+    const rect = win.getBoundingClientRect();
+    startX = e.clientX;
+    startY = e.clientY;
+    initialLeft = rect.left;
+    initialTop = rect.top;
+
+    win.style.left = `${initialLeft}px`;
+    win.style.top = `${initialTop}px`;
+    win.style.right = 'auto';
+    win.style.bottom = 'auto';
+
+    const onMouseMove = (moveEvent) => {
+      if (!isDragging) return;
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+      const newLeft = Math.max(0, Math.min(window.innerWidth - 120, initialLeft + dx));
+      const newTop = Math.max(0, Math.min(window.innerHeight - 60, initialTop + dy));
+      win.style.left = `${newLeft}px`;
+      win.style.top = `${newTop}px`;
+    };
+
+    const onMouseUp = () => {
+      isDragging = false;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  });
+}
+
+// Fallback/Legacy toggle functions
+function toggleFloatPanel(panelId) {
+  if (panelId === 'donationAlert') {
+    openFloatingDonationWindow('overlay');
+  } else if (panelId === 'leaderboard') {
+    openFloatingDonationWindow('leaderboard');
+  } else if (panelId === 'mediashare') {
+    openFloatingDonationWindow('mediashare');
+  }
+}
+
+function lockFloatPanel(panelId) {
+  toggleFdwLock();
+}
+
+function reloadFloatPanel(panelId) {
+  reloadFdwIframe();
+}
+
+// Update submit button states (checks state.savedAccounts properly)
+function updateSubmitBtnStates() {
+  const map = {
+    Twitch: !!(state.savedAccounts && state.savedAccounts.twitch),
+    Yt: !!(state.savedAccounts && state.savedAccounts.youtube),
+    TikTok: !!(state.savedAccounts && state.savedAccounts.tiktok),
+    Dc: !!(state.savedAccounts && state.savedAccounts.discordToken && state.savedAccounts.discordChannel)
+  };
+  Object.entries(map).forEach(([platform, isSaved]) => {
+    const btn = document.getElementById(`btn${platform}Submit`);
+    const textEl = document.getElementById(`acc${platform}BtnText`);
+    if (!btn) return;
+    if (isSaved) {
+      btn.classList.add('saved');
+      if (textEl) textEl.textContent = 'Saved ✓';
+    } else {
+      btn.classList.remove('saved');
+      if (textEl) textEl.textContent = 'Submit';
+    }
+  });
+}
+
 
 function onFontFamilyChange(font) {
   state.appearance.fontFamily = font;
@@ -1684,13 +2070,13 @@ function onChatTextColorChange(hex) {
 
 function updateBubbleStyle() {
   const root = document.documentElement;
-  const bubbleBg = hexToRgba(state.appearance.bubbleBgColor, state.appearance.bubbleOpacity);
+  const bubbleBg = hexToRgba(state.appearance.bubbleBgColor || '#0e121a', state.appearance.bubbleOpacity !== undefined ? state.appearance.bubbleOpacity : 78);
   root.style.setProperty('--bubble-bg-color', bubbleBg);
 
   if (state.appearance.bubbleBorder) {
-    const borderColor = hexToRgba(state.appearance.bubbleBorderColor, state.appearance.bubbleBorderOpacity || 16);
-    root.style.setProperty('--bubble-border-width', '1px');
-    root.style.setProperty('--bubble-border-color', borderColor);
+    const width = state.appearance.bubbleBorderWidth !== undefined ? state.appearance.bubbleBorderWidth : 1;
+    root.style.setProperty('--bubble-border-width', `${width}px`);
+    root.style.setProperty('--bubble-border-color', state.appearance.bubbleBorderColor || '#ffffff');
   } else {
     root.style.setProperty('--bubble-border-width', '0px');
     root.style.setProperty('--bubble-border-color', 'transparent');
@@ -1709,20 +2095,36 @@ function resetDefaultAppearance() {
     bubbleBgColor: '#0e121a',
     bubbleOpacity: 78,
     bubbleRadius: 12,
-    bubblePadding: 5,
+    bubblePadY: 5,
+    bubblePadX: 11,
     bubbleGap: 5,
     bubbleBorder: true,
     bubbleBorderColor: '#ffffff',
-    bubbleBorderOpacity: 16
+    bubbleBorderWidth: 1,
+    bubbleShadow: 'deep',
+    showTimestamp: true,
+    showBadges: true,
+    boldUsername: true,
+    animationType: 'slide-up'
   };
   applyAppearanceToDom();
   saveAppearanceSettings();
 }
 
+let appearanceSaveDebounceTimer = null;
 function saveAppearanceSettings() {
+  // 1. Immediate save to localStorage
   try {
     localStorage.setItem('livechat_appearance', JSON.stringify(state.appearance));
   } catch (e) {}
+
+  // 2. Debounced save to permanent disk via saveSavedAccountsToStorage (250ms)
+  if (appearanceSaveDebounceTimer) clearTimeout(appearanceSaveDebounceTimer);
+  appearanceSaveDebounceTimer = setTimeout(() => {
+    if (typeof saveSavedAccountsToStorage === 'function') {
+      saveSavedAccountsToStorage();
+    }
+  }, 250);
 }
 
 function loadSavedAppearance() {
@@ -1741,70 +2143,118 @@ function applyAppearanceToDom() {
   // Background
   updateBackgroundStyle();
   const colorInput = document.getElementById('bgColorPicker');
-  if (colorInput) colorInput.value = state.appearance.bgColor;
+  if (colorInput) colorInput.value = state.appearance.bgColor || '#000000';
   const colorHex = document.getElementById('bgColorHex');
-  if (colorHex) colorHex.textContent = state.appearance.bgColor;
+  if (colorHex) colorHex.textContent = state.appearance.bgColor || '#000000';
   const opacitySlider = document.getElementById('bgOpacitySlider');
-  if (opacitySlider) opacitySlider.value = state.appearance.bgOpacity;
+  if (opacitySlider) opacitySlider.value = state.appearance.bgOpacity !== undefined ? state.appearance.bgOpacity : 0;
   const opacityVal = document.getElementById('bgOpacityVal');
-  if (opacityVal) opacityVal.textContent = `${state.appearance.bgOpacity}%`;
+  if (opacityVal) opacityVal.textContent = `${state.appearance.bgOpacity || 0}%`;
 
-  // Bubble
+  // Bubble Colors & Opacity
   updateBubbleStyle();
-  const bColor = document.getElementById('bubbleBgColorPicker');
-  if (bColor) bColor.value = state.appearance.bubbleBgColor;
-  const bHex = document.getElementById('bubbleBgHex');
-  if (bHex) bHex.textContent = state.appearance.bubbleBgColor;
+  const bColor = document.getElementById('bubbleColorPicker');
+  if (bColor) bColor.value = state.appearance.bubbleBgColor || '#0e121a';
+  const bHex = document.getElementById('bubbleColorHex');
+  if (bHex) bHex.textContent = state.appearance.bubbleBgColor || '#0e121a';
+
+  const tColor = document.getElementById('bubbleTextColorPicker');
+  if (tColor) tColor.value = state.appearance.chatTextColor || '#ffffff';
+  const tHex = document.getElementById('bubbleTextColorHex');
+  if (tHex) tHex.textContent = state.appearance.chatTextColor || '#ffffff';
+  root.style.setProperty('--chat-text-color', state.appearance.chatTextColor || '#ffffff');
+
   const bOpacity = document.getElementById('bubbleOpacitySlider');
-  if (bOpacity) bOpacity.value = state.appearance.bubbleOpacity;
+  if (bOpacity) bOpacity.value = state.appearance.bubbleOpacity !== undefined ? state.appearance.bubbleOpacity : 78;
   const bOpacityVal = document.getElementById('bubbleOpacityVal');
-  if (bOpacityVal) bOpacityVal.textContent = `${state.appearance.bubbleOpacity}%`;
-  
-  const chkBorder = document.getElementById('chkBubbleBorder');
-  if (chkBorder) chkBorder.checked = state.appearance.bubbleBorder;
-  const borderGroup = document.getElementById('bubbleBorderPickerGroup');
-  if (borderGroup) borderGroup.style.display = state.appearance.bubbleBorder ? 'flex' : 'none';
-  const bBorderColor = document.getElementById('bubbleBorderColorPicker');
-  if (bBorderColor) bBorderColor.value = state.appearance.bubbleBorderColor;
-  const bBorderHex = document.getElementById('bubbleBorderHex');
-  if (bBorderHex) bBorderHex.textContent = state.appearance.bubbleBorderColor;
+  if (bOpacityVal) bOpacityVal.textContent = `${state.appearance.bubbleOpacity !== undefined ? state.appearance.bubbleOpacity : 78}%`;
 
-  // Radius & Padding & Gap
+  // Radius, Padding, Gap
   const bRadius = document.getElementById('bubbleRadiusSlider');
-  if (bRadius) bRadius.value = state.appearance.bubbleRadius;
+  if (bRadius) bRadius.value = state.appearance.bubbleRadius || 12;
   const bRadiusVal = document.getElementById('bubbleRadiusVal');
-  if (bRadiusVal) bRadiusVal.textContent = `${state.appearance.bubbleRadius}px`;
-  root.style.setProperty('--bubble-border-radius', `${state.appearance.bubbleRadius}px`);
+  if (bRadiusVal) bRadiusVal.textContent = `${state.appearance.bubbleRadius || 12}px`;
+  root.style.setProperty('--bubble-border-radius', `${state.appearance.bubbleRadius || 12}px`);
 
-  const bPadding = document.getElementById('bubblePaddingSlider');
-  if (bPadding) bPadding.value = state.appearance.bubblePadding;
-  const py = state.appearance.bubblePadding;
-  const px = Math.round(py * 2.2);
+  const py = state.appearance.bubblePadY !== undefined ? state.appearance.bubblePadY : (state.appearance.bubblePadding || 5);
+  const bPadY = document.getElementById('bubblePadYSlider');
+  if (bPadY) bPadY.value = py;
+  const bPadYVal = document.getElementById('bubblePadYVal');
+  if (bPadYVal) bPadYVal.textContent = `${py}px`;
   root.style.setProperty('--bubble-padding-y', `${py}px`);
+
+  const px = state.appearance.bubblePadX !== undefined ? state.appearance.bubblePadX : Math.round(py * 2.2);
+  const bPadX = document.getElementById('bubblePadXSlider');
+  if (bPadX) bPadX.value = px;
+  const bPadXVal = document.getElementById('bubblePadXVal');
+  if (bPadXVal) bPadXVal.textContent = `${px}px`;
   root.style.setProperty('--bubble-padding-x', `${px}px`);
 
   const bGap = document.getElementById('bubbleGapSlider');
-  if (bGap) bGap.value = state.appearance.bubbleGap;
+  if (bGap) bGap.value = state.appearance.bubbleGap !== undefined ? state.appearance.bubbleGap : 5;
   const bGapVal = document.getElementById('bubbleGapVal');
-  if (bGapVal) bGapVal.textContent = `${state.appearance.bubbleGap}px`;
-  root.style.setProperty('--bubble-gap', `${state.appearance.bubbleGap}px`);
+  if (bGapVal) bGapVal.textContent = `${state.appearance.bubbleGap !== undefined ? state.appearance.bubbleGap : 5}px`;
+  root.style.setProperty('--bubble-gap', `${state.appearance.bubbleGap !== undefined ? state.appearance.bubbleGap : 5}px`);
+
+  // Border
+  const chkBorder = document.getElementById('chkBubbleBorder');
+  if (chkBorder) chkBorder.checked = !!state.appearance.bubbleBorder;
+  const colorRow = document.getElementById('bubbleBorderColorRow');
+  const widthRow = document.getElementById('bubbleBorderWidthRow');
+  if (colorRow) colorRow.style.display = state.appearance.bubbleBorder ? 'flex' : 'none';
+  if (widthRow) widthRow.style.display = state.appearance.bubbleBorder ? 'flex' : 'none';
+
+  const bBorderColor = document.getElementById('bubbleBorderColorPicker');
+  if (bBorderColor) bBorderColor.value = state.appearance.bubbleBorderColor || '#ffffff';
+  const bBorderHex = document.getElementById('bubbleBorderHex');
+  if (bBorderHex) bBorderHex.textContent = state.appearance.bubbleBorderColor || '#ffffff';
+
+  const bBorderWidth = document.getElementById('bubbleBorderWidthSlider');
+  if (bBorderWidth) bBorderWidth.value = state.appearance.bubbleBorderWidth || 1;
+  const bBorderWidthVal = document.getElementById('bubbleBorderWidthVal');
+  if (bBorderWidthVal) bBorderWidthVal.textContent = `${state.appearance.bubbleBorderWidth || 1}px`;
+
+  // Shadow preset
+  const shadowSel = document.getElementById('bubbleShadowSelect');
+  const shadowVal = state.appearance.bubbleShadow || 'deep';
+  if (shadowSel) shadowSel.value = shadowVal;
+  root.style.setProperty('--bubble-shadow', SHADOW_PRESETS[shadowVal] || SHADOW_PRESETS.deep);
+
+  // Chat elements & animations
+  const chkTimestamp = document.getElementById('chkShowTimestamp');
+  const showTs = state.appearance.showTimestamp !== false;
+  if (chkTimestamp) chkTimestamp.checked = showTs;
+
+  const chkBadges = document.getElementById('chkShowBadges');
+  const showBd = state.appearance.showBadges !== false;
+  if (chkBadges) chkBadges.checked = showBd;
+
+  const chkBold = document.getElementById('chkBoldUsername');
+  const isBold = state.appearance.boldUsername !== false;
+  if (chkBold) chkBold.checked = isBold;
+
+  const feed = document.getElementById('chatFeed');
+  if (feed) {
+    feed.classList.toggle('hide-timestamps', !showTs);
+    feed.classList.toggle('hide-badges', !showBd);
+    feed.classList.toggle('normal-username', !isBold);
+  }
+
+  const animSel = document.getElementById('bubbleAnimSelect');
+  const animVal = state.appearance.animationType || 'slide-up';
+  if (animSel) animSel.value = animVal;
+  root.style.setProperty('--bubble-anim', ANIMATION_PRESETS[animVal] || ANIMATION_PRESETS['slide-up']);
 
   // Font & Size
   const fontSel = document.getElementById('fontSelect');
-  if (fontSel) fontSel.value = state.appearance.fontFamily;
-  root.style.setProperty('--chat-font-family', state.appearance.fontFamily);
+  if (fontSel) fontSel.value = state.appearance.fontFamily || "'Inter', sans-serif";
+  root.style.setProperty('--chat-font-family', state.appearance.fontFamily || "'Inter', sans-serif");
 
   const fSize = document.getElementById('fontSizeSlider');
-  if (fSize) fSize.value = state.appearance.fontSize;
+  if (fSize) fSize.value = state.appearance.fontSize || 14;
   const fSizeVal = document.getElementById('fontSizeVal');
-  if (fSizeVal) fSizeVal.textContent = `${state.appearance.fontSize}px`;
-  root.style.setProperty('--chat-font-size', `${state.appearance.fontSize}px`);
-
-  const tColor = document.getElementById('chatTextColorPicker');
-  if (tColor) tColor.value = state.appearance.chatTextColor;
-  const tHex = document.getElementById('chatTextHex');
-  if (tHex) tHex.textContent = state.appearance.chatTextColor;
-  root.style.setProperty('--chat-text-color', state.appearance.chatTextColor);
+  if (fSizeVal) fSizeVal.textContent = `${state.appearance.fontSize || 14}px`;
+  root.style.setProperty('--chat-font-size', `${state.appearance.fontSize || 14}px`);
 }
 
 // Platform Card Connect Helpers
@@ -2040,6 +2490,160 @@ function switchSettingsTab(tabId) {
   if (pane) pane.classList.add('active');
 }
 
+// ==========================================================================
+// Multilingual (i18n) & Support Creator Engine (English & Indonesia)
+// ==========================================================================
+const I18N_DICTIONARY = {
+  id: {
+    tab_stream: 'Stream',
+    tab_display: 'Tampilan',
+    tab_donation: 'Donasi',
+    tab_controls: 'Kontrol',
+    tab_support: 'Support',
+    sec_language: 'Pilihan Bahasa / Language',
+    hint_language: 'Pilih bahasa antarmuka aplikasi / Select application language',
+    sec_support_creator: 'Dukung Streamer & Developer',
+    hint_support: 'Dukung terus live streaming dan pengembangan MultiChatStream melalui link resmi di bawah ini:',
+    btn_open_yt: 'Buka Channel YouTube',
+    btn_open_tako: 'Beri Dukungan di Tako',
+    btn_copy: 'Salin Link',
+    copied: 'Tersalin!',
+    app_info_desc: 'Aplikasi agregator chat & overlay live streaming multi-platform (YouTube, Twitch, TikTok, Discord, Tako, Saweria, Trakteer).',
+    creator_note_title: 'Catatan dari Pembuat',
+    creator_note_body: 'Ini aplikasi iseng aja, dan dengan niat membantu para sahabat streamer yang baru mulai dengan satu monitor saja. semangat ya!',
+    guide_title: 'Guide',
+    guide_tag: 'Guide?',
+    guide_1_title: 'Simpan Akun Otomatis',
+    guide_1_desc: 'Kamu bisa save account Live kamu dengan memberikan username atau nama channel untuk disimpan dan akan otomatis menampilkan chat begitu kamu mulai Live!',
+    guide_2_title: 'Tautkan Manual',
+    guide_2_desc: 'Kamu juga bisa memakai cara menautkan secara manual dengan mengisi kolom link / username untuk mendapatkan akses obrolan chat yang sama.',
+    guide_3_title: 'Collab Stream (Multi-Chat)',
+    guide_3_desc: 'Kamu juga bisa menambahkan lebih dari satu live chat, jika kamu ingin collab stream dan menyatukan semua chat dari partner stream kamu dalam satu layar.',
+    guide_4_title: 'Panel Donasi Mengambang',
+    guide_4_desc: 'Buka panel donasi mengambang untuk memantau alert Tako, Saweria, atau Trakteer, leaderboard donatur, dan media share. Panel dapat dipindah bebas ke mana saja dan dikunci.'
+  },
+  en: {
+    tab_stream: 'Stream',
+    tab_display: 'Appearance',
+    tab_donation: 'Donations',
+    tab_controls: 'Controls',
+    tab_support: 'Support',
+    sec_language: 'Language Selection / Bahasa',
+    hint_language: 'Select application interface language',
+    sec_support_creator: 'Support Creator & Developer',
+    hint_support: 'Support our live streams and MultiChatStream development via the official links below:',
+    btn_open_yt: 'Open YouTube Channel',
+    btn_open_tako: 'Send Support on Tako',
+    btn_copy: 'Copy Link',
+    copied: 'Copied!',
+    app_info_desc: 'Multi-platform live streaming chat aggregator & overlay app (YouTube, Twitch, TikTok, Discord, Tako, Saweria, Trakteer).',
+    creator_note_title: 'Note from Creator',
+    creator_note_body: 'This is just a fun little project made with the intention to help fellow streamers who are just starting out with only a single monitor. Keep up the spirit!',
+    guide_title: 'Guide',
+    guide_tag: 'Guide?',
+    guide_1_title: 'Auto-Save Accounts',
+    guide_1_desc: 'Save your live stream accounts by providing your username or channel name. Chat will automatically connect and show messages once you go Live!',
+    guide_2_title: 'Manual Link',
+    guide_2_desc: 'You can also connect manually by pasting your live link or channel username to get immediate chat access.',
+    guide_3_title: 'Collab Stream (Multi-Chat)',
+    guide_3_desc: 'Add multiple live stream channels when collaborating with other creators to merge all audience chats into one screen.',
+    guide_4_title: 'Floating Donation Panel',
+    guide_4_desc: 'Open the floating panel to monitor alerts (Tako, Saweria, Trakteer), donor leaderboards, and media share. Move it anywhere and lock its position.'
+  }
+};
+
+let currentAppLanguage = 'id';
+try {
+  const savedLang = localStorage.getItem('multichatstream_language');
+  if (savedLang === 'en' || savedLang === 'id') currentAppLanguage = savedLang;
+} catch (e) {}
+
+function setAppLanguage(lang) {
+  playRetroSound('click');
+  if (lang !== 'id' && lang !== 'en') lang = 'id';
+  currentAppLanguage = lang;
+  try {
+    localStorage.setItem('multichatstream_language', lang);
+  } catch (e) {}
+
+  applyAppLanguage(lang);
+  saveSavedAccountsToStorage();
+}
+
+function applyAppLanguage(lang) {
+  if (lang !== 'id' && lang !== 'en') lang = 'id';
+  const dict = I18N_DICTIONARY[lang] || I18N_DICTIONARY['id'];
+
+  const btnId = document.getElementById('btnLangId');
+  const btnEn = document.getElementById('btnLangEn');
+  if (btnId && btnEn) {
+    if (lang === 'id') {
+      btnId.classList.add('active');
+      btnEn.classList.remove('active');
+    } else {
+      btnId.classList.remove('active');
+      btnEn.classList.add('active');
+    }
+  }
+
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (dict[key]) {
+      el.textContent = dict[key];
+    }
+  });
+
+  const titleEl = document.getElementById('settings-title');
+  if (titleEl) {
+    titleEl.textContent = 'settings';
+  }
+}
+
+function openExternalLink(url) {
+  playRetroSound('click');
+  if (electronIpc && electronIpc.invoke) {
+    electronIpc.invoke('open-external-url', url);
+  } else if (typeof window !== 'undefined' && window.require) {
+    try {
+      const { ipcRenderer, shell } = window.require('electron');
+      if (shell) shell.openExternal(url);
+      else ipcRenderer.invoke('open-external-url', url);
+    } catch (e) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  } else {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+}
+
+function copySupportLink(url, btnElement) {
+  playRetroSound('click');
+  navigator.clipboard.writeText(url).then(() => {
+    const spanEl = btnElement.querySelector('[data-i18n]');
+    const origText = spanEl ? spanEl.textContent : btnElement.textContent;
+    const isEn = currentAppLanguage === 'en';
+    const copiedText = isEn ? '✓ Copied!' : '✓ Tersalin!';
+    
+    if (spanEl) {
+      spanEl.textContent = copiedText;
+    } else {
+      btnElement.textContent = copiedText;
+    }
+    btnElement.classList.add('btn-copied');
+
+    setTimeout(() => {
+      if (spanEl) {
+        spanEl.textContent = origText;
+      } else {
+        btnElement.textContent = origText;
+      }
+      btnElement.classList.remove('btn-copied');
+    }, 2000);
+  }).catch(() => {
+    prompt('Link:', url);
+  });
+}
+
 // --- Orientation / Lock Position & Always-On-Top Controls ---
 function toggleLockPosition(val) {
   if (typeof val === 'boolean') {
@@ -2234,11 +2838,15 @@ async function loadSavedAccounts() {
         if (diskConfig.donations) state.donations = { ...state.donations, ...diskConfig.donations };
         if (diskConfig.leaderboard) state.leaderboard = diskConfig.leaderboard;
         if (diskConfig.collabPartners) state.collabPartners = diskConfig.collabPartners;
+        if (diskConfig.language) currentAppLanguage = diskConfig.language;
+        applyAppLanguage(currentAppLanguage);
         updateSavedAccountsUI();
         updateDonationsUI();
         applyAppearanceToDom();
         renderLeaderboard();
+        renderFdwLeaderboard();
         renderCollabUI();
+        initFdwDrag();
         return;
       }
     } catch (e) {
@@ -2265,13 +2873,23 @@ async function loadSavedAccounts() {
     if (rawCollab) {
       state.collabPartners = JSON.parse(rawCollab);
     }
+    const rawAppearance = localStorage.getItem('livechat_appearance');
+    if (rawAppearance) {
+      state.appearance = { ...state.appearance, ...JSON.parse(rawAppearance) };
+      applyAppearanceToDom();
+    }
+    const savedLang = localStorage.getItem('multichatstream_language');
+    if (savedLang === 'en' || savedLang === 'id') currentAppLanguage = savedLang;
+    applyAppLanguage(currentAppLanguage);
   } catch (e) {
     console.warn("Could not load saved accounts:", e);
   }
   updateSavedAccountsUI();
   updateDonationsUI();
   renderLeaderboard();
+  renderFdwLeaderboard();
   renderCollabUI();
+  initFdwDrag();
 }
 
 function saveSavedAccountsToStorage() {
@@ -2281,6 +2899,8 @@ function saveSavedAccountsToStorage() {
     localStorage.setItem('livechat_donations', JSON.stringify(state.donations));
     localStorage.setItem('livechat_leaderboard', JSON.stringify(state.leaderboard));
     localStorage.setItem('livechat_collab_partners', JSON.stringify(state.collabPartners));
+    localStorage.setItem('livechat_appearance', JSON.stringify(state.appearance));
+    localStorage.setItem('multichatstream_language', currentAppLanguage);
   } catch (e) {
     console.warn("Could not save accounts to storage:", e);
   }
@@ -2294,7 +2914,8 @@ function saveSavedAccountsToStorage() {
         appearance: state.appearance,
         donations: state.donations,
         leaderboard: state.leaderboard,
-        collabPartners: state.collabPartners
+        collabPartners: state.collabPartners,
+        language: currentAppLanguage
       };
       electronIpc.invoke('save-config', fullConfig);
     } catch (e) {
@@ -2403,6 +3024,8 @@ function updateSavedAccountsUI() {
     if (accDcBtn) accDcBtn.textContent = 'Simpan';
     if (accDcLogout) accDcLogout.classList.add('hidden');
   }
+  // Update submit button visual state
+  if (typeof updateSubmitBtnStates === 'function') updateSubmitBtnStates();
 }
 
 let currentLoginPlatform = null;
@@ -2516,6 +3139,7 @@ function saveAccountFromModal() {
   state.savedAccounts[currentLoginPlatform] = val;
   saveSavedAccountsToStorage();
   updateSavedAccountsUI();
+  updateSubmitBtnStates();
   closeLoginModal();
   playRetroSound('connect');
 
@@ -3122,6 +3746,13 @@ function showDonationAlert({ platform = 'SAWERIA', donor = 'Donatur', amount = '
     }, 4500);
   }
 
+  // Broadcast to standalone donation window
+  if (electronIpc) {
+    electronIpc.send('broadcast-donation-event', {
+      platform, donor, amount, message
+    });
+  }
+
   // Record to session leaderboard
   recordDonationToLeaderboard(donor, amount);
 }
@@ -3142,12 +3773,31 @@ function showMedserAlert({ donor = 'Donatur', title = 'Video Media Share', amoun
   if (amountEl) amountEl.textContent = amount;
   if (durEl) durEl.textContent = `⏱ ${duration}`;
 
+  // Also update floating window Media Share tab
+  const fdwTitle = document.getElementById('fdwMedserTitle');
+  const fdwDonor = document.getElementById('fdwMedserDonor');
+  const fdwAmount = document.getElementById('fdwMedserAmount');
+  const fdwDuration = document.getElementById('fdwMedserDuration');
+  const fdwStatus = document.getElementById('fdwMedserStatusText');
+  if (fdwTitle) fdwTitle.textContent = title;
+  if (fdwDonor) fdwDonor.textContent = `Donatur: ${donor}`;
+  if (fdwAmount) fdwAmount.textContent = `Nominal: ${amount}`;
+  if (fdwDuration) fdwDuration.textContent = `Durasi: ${duration}`;
+  if (fdwStatus) fdwStatus.textContent = `Sedang Diputar: ${donor}`;
+
   if (container) {
     container.classList.remove('hidden');
     if (medserAlertTimer) clearTimeout(medserAlertTimer);
     medserAlertTimer = setTimeout(() => {
       container.classList.add('hidden');
     }, 5000);
+  }
+
+  // Broadcast to standalone donation window
+  if (electronIpc) {
+    electronIpc.send('broadcast-medser-event', {
+      donor, title, amount, duration
+    });
   }
 }
 
@@ -3171,11 +3821,17 @@ function recordDonationToLeaderboard(donor, amountStr) {
     });
   }
 
+  // Broadcast updated leaderboard to standalone donation window
+  if (electronIpc) {
+    electronIpc.send('broadcast-leaderboard-update', state.leaderboard);
+  }
+
   // Sort descending by totalNumeric
   state.leaderboard.sort((a, b) => (b.totalNumeric || 0) - (a.totalNumeric || 0));
 
   saveSavedAccountsToStorage();
   renderLeaderboard();
+  renderFdwLeaderboard();
 }
 
 function renderLeaderboard() {
@@ -3214,6 +3870,7 @@ function clearLeaderboard() {
   state.leaderboard = [];
   saveSavedAccountsToStorage();
   renderLeaderboard();
+  renderFdwLeaderboard();
   addSystemMessage('Leaderboard donatur telah di-reset.');
 }
 

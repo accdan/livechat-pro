@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live Donation & Widgets - MultiChatStream</title>
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=K2D:wght@400;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="globals.css">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: transparent !important;
+      overflow: hidden;
+      user-select: none;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .standalone-donation-window {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: rgba(18, 22, 33, 0.94);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 12px;
+      border: 1px solid rgba(157, 176, 255, 0.45);
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+
+    .standalone-donation-window.locked {
+      border-color: rgba(16, 185, 129, 0.6);
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
+    }
+
+    .standalone-donation-window.locked .fdw-header {
+      -webkit-app-region: no-drag !important;
+      cursor: default !important;
+    }
+
+    .fdw-header {
+      -webkit-app-region: drag;
+      cursor: grab;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #9db0ff;
+      padding: 5px 8px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+      flex-shrink: 0;
+      gap: 6px;
+    }
+
+    .fdw-header:active {
+      cursor: grabbing;
+    }
+
+    .fdw-header-left, .fdw-tabs, .fdw-controls {
+      -webkit-app-region: no-drag;
+    }
+
+    .fdw-content {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      background: transparent;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div id="standaloneDonationWindow" class="standalone-donation-window">
+    <!-- Draggable Header Bar -->
+    <div class="fdw-header" id="fdwDragHeader">
+      <div class="fdw-header-left">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        <span class="fdw-title">Live Donation Panel</span>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="fdw-tabs">
+        <button class="fdw-tab-btn active" id="fdwTabBtnOverlay" onclick="switchFdwTab('overlay')" title="Overlay Donasi">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          Overlay
+        </button>
+        <button class="fdw-tab-btn" id="fdwTabBtnLeaderboard" onclick="switchFdwTab('leaderboard')" title="Leaderboard Donatur">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Leaderboard
+        </button>
+        <button class="fdw-tab-btn" id="fdwTabBtnMediashare" onclick="switchFdwTab('mediashare')" title="Media Share">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          Media Share
+        </button>
+      </div>
+
+      <!-- Window Action Controls -->
+      <div class="fdw-controls">
+        <button class="fdw-ctrl-btn" id="fdwLockBtn" onclick="toggleDonationLock()" title="Kunci Posisi Jendela">
+          <svg id="fdwLockSvg" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#000" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path id="fdwLockShackle" d="M7 11V7a5 5 0 0 1 9.9-1"/>
+          </svg>
+        </button>
+        <button class="fdw-ctrl-btn" onclick="reloadCurrentTab()" title="Muat Ulang Konten">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#000" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+            <path d="M3 3v5h5"/>
+            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+            <path d="M16 16h5v5"/>
+          </svg>
+        </button>
+        <button class="fdw-ctrl-btn fdw-close-btn" onclick="closeDonationWindow()" title="Tutup Jendela">
+          <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="#000" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Window Body Panes -->
+    <div class="fdw-content">
+      <!-- 1. Overlay Iframe Tab -->
+      <div id="fdwPaneOverlay" class="fdw-pane active">
+        <div class="fdw-toolbar">
+          <div class="fdw-toolbar-left">
+            <label class="fdw-label">Sumber Overlay:</label>
+            <select id="fdwOverlaySourceSelect" class="fdw-select" onchange="onSourceSelectChanged()">
+              <option value="auto">Auto (Sesuai URL Tersimpan)</option>
+              <option value="tako">Tako</option>
+              <option value="saweria">Saweria</option>
+              <option value="custom">Trakteer / Custom</option>
+            </select>
+          </div>
+          <div class="fdw-toolbar-right">
+            <button class="fdw-btn-action" onclick="reloadOverlayIframe()" title="Refresh Iframe">
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+        <div class="fdw-frame-container">
+          <iframe id="fdwOverlayIframe" class="fdw-iframe" title="Floating Donation Overlay" allow="autoplay; encrypted-media" referrerpolicy="no-referrer"></iframe>
+          <div id="fdwOverlayPlaceholder" class="fdw-placeholder hidden">
+            <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#9db0ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            <p class="fdw-placeholder-text">Belum ada URL overlay tersimpan.</p>
+            <p class="fdw-placeholder-sub">Masukkan URL Tako, Saweria, atau Trakteer di tab Donasi aplikasi utama.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Leaderboard Tab -->
+      <div id="fdwPaneLeaderboard" class="fdw-pane">
+        <div class="fdw-toolbar">
+          <div class="fdw-toolbar-left">
+            <span class="fdw-label">Peringkat Donatur Sesi Ini</span>
+          </div>
+          <div class="fdw-toolbar-right">
+            <button class="fdw-btn-action" onclick="triggerTestDonation()">Test Donasi</button>
+            <button class="fdw-btn-action danger" onclick="resetLeaderboard()">Reset</button>
+          </div>
+        </div>
+        <div id="fdwLeaderboardList" class="fdw-leaderboard-container">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- 3. Media Share Tab -->
+      <div id="fdwPaneMediashare" class="fdw-pane">
+        <div class="fdw-toolbar">
+          <div class="fdw-toolbar-left">
+            <span class="fdw-label">Player & Status Media Share</span>
+          </div>
+          <div class="fdw-toolbar-right">
+            <button class="fdw-btn-action" onclick="triggerTestMedser()">Test Media Share</button>
+          </div>
+        </div>
+        <div class="fdw-mediashare-body">
+          <div id="fdwMedserActiveCard" class="fdw-medser-card">
+            <div class="fdw-medser-status">
+              <span class="medser-pulse-dot"></span>
+              <span id="fdwMedserStatusText">Siap Menerima Media Share</span>
+            </div>
+            <div class="fdw-medser-info">
+              <h5 id="fdwMedserTitle">Belum ada media share diputar</h5>
+              <div class="fdw-medser-meta">
+                <span id="fdwMedserDonor">Donatur: -</span>
+                <span id="fdwMedserAmount">Nominal: -</span>
+                <span id="fdwMedserDuration">Durasi: -</span>
+              </div>
+            </div>
+          </div>
+          <div class="fdw-medser-instructions">
+            <p>💡 <em>Media share yang dipicu dari Tako atau Saweria akan otomatis muncul di jendela ini secara real-time.</em></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="donation.js"></script>
+</body>
+</html>

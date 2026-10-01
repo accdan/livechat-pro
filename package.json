@@ -28,29 +28,35 @@
     "appId": "com.multichatstream.app",
     "productName": "MultiChatStream",
     "copyright": "Copyright © 2026 MultiChatStream",
+    "directories": {
+      "output": "build-output"
+    },
     "files": [
       "index.html",
       "style.css",
       "app.js",
       "main.js",
+      "donation.html",
+      "donation.js",
+      "favicon.ico",
+      "kaget.png",
       "node_modules/**/*"
     ],
     "win": {
+      "icon": "favicon.ico",
       "target": [
         "portable",
         "nsis"
       ],
-      "certificateFile": "certs/LiveChatPro.pfx",
-      "certificatePassword": "LiveChatPro2026!",
-      "signingHashAlgorithms": [
-        "sha256"
-      ]
+      "sign": "scripts/sign.js"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
+      "installerIcon": "favicon.ico",
+      "uninstallerIcon": "favicon.ico",
       "artifactName": "multichatstream-installer.exe"
     },
     "portable": {

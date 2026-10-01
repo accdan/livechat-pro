@@ -1,6 +1,7 @@
-const { app, BrowserWindow, Menu, session, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, session, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 // Permanent AppData storage directory (persists across restarts and portable runs)
 const baseConfigRoot = process.env.APPDATA || (process.platform === 'darwin' ? path.join(process.env.HOME, 'Library', 'Application Support') : path.join(process.env.HOME, '.config'));
@@ -20,6 +21,100 @@ try {
 } catch (e) {
   console.warn("Permanent config dir init warning:", e);
 }
+
+// === SECURITY LAYER 1: ANTI-DEVTOOLS & SHORTCUT BLOCKER ===
+function triggerTamperResponse() {
+  dialog.showMessageBoxSync({
+    type: 'error',
+    title: 'MultiChatStream Security',
+    message: 'Ish ish tak patotlah bang',
+    buttons: ['Exit']
+  });
+  app.exit(0);
+}
+
+// === SECURITY LAYER 1: ANTI-DEVTOOLS & SHORTCUT BLOCKER ===
+function blockDevTools() {
+  // Disable devtools in production
+  if (app.isPackaged) {
+    app.on('web-contents-created', (event, contents) => {
+      contents.on('devtools-opened', () => {
+        contents.closeDevTools();
+        triggerTamperResponse();
+      });
+    });
+  }
+
+  // Intercept tampering shortcuts globally
+  const tamperShortcuts = [
+    'F12',
+    'Ctrl+Shift+I',
+    'Ctrl+Shift+J',
+    'Ctrl+Shift+C',
+    'Ctrl+U'
+  ];
+
+  app.whenReady().then(() => {
+    const { globalShortcut } = require('electron');
+    tamperShortcuts.forEach(acc => {
+      globalShortcut.register(acc, () => {
+        triggerTamperResponse();
+      });
+    });
+    // Swallow benign refresh shortcuts
+    ['F5', 'Ctrl+R'].forEach(acc => {
+      globalShortcut.register(acc, () => {});
+    });
+  });
+
+  // Disable context menu (right click inspect element)
+  app.on('web-contents-created', (e, wc) => {
+    wc.on('context-menu', (event) => {
+      event.preventDefault();
+    });
+  });
+
+  // Renderer tamper IPC
+  ipcMain.on('tamper-detected', () => {
+    triggerTamperResponse();
+  });
+}
+
+// === SECURITY LAYER 2: ANTI-DEBUGGING CLI FLAG GUARD ===
+function guardCliFlags() {
+  const riskyFlags = ['--inspect', '--inspect-brk', '--remote-debugging-port', '--enable-logging', '--js-flags'];
+  const found = process.argv.some(arg => riskyFlags.some(flag => arg.startsWith(flag)));
+  if (found) {
+    triggerTamperResponse();
+  }
+}
+
+// === SECURITY LAYER 4: ASAR INTEGRITY VERIFICATION ===
+function verifyAsarIntegrity() {
+  try {
+    const asarPath = path.join(__dirname, 'app.asar');
+    if (!fs.existsSync(asarPath)) return; // In dev mode there is no asar
+    const data = fs.readFileSync(asarPath);
+    const hash = crypto.createHash('sha256').update(data).digest('hex');
+    const EXPECTED_HASH = 'PLACEHOLDER_EXPECTED_HASH'; // <-- replace with real hash after build if desired
+    if (EXPECTED_HASH !== 'PLACEHOLDER_EXPECTED_HASH' && hash !== EXPECTED_HASH) {
+      dialog.showMessageBoxSync({
+        type: 'error',
+        title: 'MultiChatStream Security',
+        message: 'Ish ish tak patotlah bang',
+        buttons: ['Exit']
+      });
+      app.exit(0);
+    }
+  } catch (e) {
+    console.warn('ASAR integrity check failed:', e);
+  }
+}
+
+// Execute security checks early
+blockDevTools();
+guardCliFlags();
+verifyAsarIntegrity();
 const configFilePath = path.join(permanentConfigDir, 'settings.json');
 
 // Fix Windows Chromium cache permission conflict while keeping config permanent
@@ -77,6 +172,7 @@ function createWindow() {
     maximizable: false,
     fullscreenable: false,
     title: "MultiChatStream - Stream Overlay",
+    icon: path.join(__dirname, 'favicon.ico'),
     transparent: true,
     frame: false,
     alwaysOnTop: true, // Selalu di depan agar saat pindah screen / ALT+TAB tidak tertindih
@@ -199,6 +295,162 @@ ipcMain.on('toggle-settings-panel', (event, isOpen) => {
     console.warn("Error resizing window for settings panel:", err);
   }
 });
+
+// =========================================================================
+// Standalone Live Donation Panel Window (Movable anywhere across all screens)
+// =========================================================================
+let donationWindow = null;
+
+function createOrShowDonationWindow(tab = 'overlay') {
+  if (donationWindow && !donationWindow.isDestroyed()) {
+    donationWindow.show();
+    donationWindow.focus();
+    donationWindow.webContents.send('switch-donation-tab', tab);
+    return;
+  }
+
+  // Load saved donation window bounds if available
+  let bounds = { width: 380, height: 310 };
+  try {
+    if (fs.existsSync(configFilePath)) {
+      const savedConfig = JSON.parse(fs.readFileSync(configFilePath, 'utf8'));
+      if (savedConfig && savedConfig.donationWindowBounds) {
+        bounds = Object.assign(bounds, savedConfig.donationWindowBounds);
+      }
+    }
+  } catch (e) {}
+
+  donationWindow = new BrowserWindow({
+    width: bounds.width || 380,
+    height: bounds.height || 310,
+    x: bounds.x,
+    y: bounds.y,
+    minWidth: 280,
+    minHeight: 180,
+    transparent: true,
+    frame: false,
+    alwaysOnTop: true,
+    hasShadow: false,
+    resizable: true,
+    autoHideMenuBar: true,
+    show: true,
+    title: "Live Donation Panel - MultiChatStream",
+    icon: path.join(__dirname, 'favicon.ico'),
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+      webSecurity: false,
+      autoplayPolicy: 'no-user-gesture-required'
+    }
+  });
+
+  donationWindow.setAlwaysOnTop(true, 'screen-saver');
+
+  let saveDonationBoundsTimeout = null;
+  function debounceSaveDonationBounds() {
+    if (saveDonationBoundsTimeout) clearTimeout(saveDonationBoundsTimeout);
+    saveDonationBoundsTimeout = setTimeout(() => {
+      if (!donationWindow || donationWindow.isDestroyed()) return;
+      try {
+        const b = donationWindow.getBounds();
+        let currentConfig = {};
+        if (fs.existsSync(configFilePath)) {
+          currentConfig = JSON.parse(fs.readFileSync(configFilePath, 'utf8'));
+        }
+        currentConfig.donationWindowBounds = b;
+        fs.writeFileSync(configFilePath, JSON.stringify(currentConfig, null, 2), 'utf8');
+      } catch (e) {}
+    }, 600);
+  }
+
+  donationWindow.on('resize', debounceSaveDonationBounds);
+  donationWindow.on('move', debounceSaveDonationBounds);
+
+  donationWindow.loadFile(path.join(__dirname, 'donation.html'));
+
+  donationWindow.webContents.on('did-finish-load', () => {
+    donationWindow.webContents.send('switch-donation-tab', tab);
+  });
+
+  donationWindow.on('closed', () => {
+    donationWindow = null;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('donation-window-closed');
+    }
+  });
+}
+
+ipcMain.on('open-donation-window', (event, tab) => {
+  createOrShowDonationWindow(tab || 'overlay');
+});
+
+ipcMain.on('close-donation-window', () => {
+  if (donationWindow && !donationWindow.isDestroyed()) {
+    donationWindow.close();
+  }
+});
+
+ipcMain.on('toggle-donation-window', (event, tab) => {
+  if (donationWindow && !donationWindow.isDestroyed() && donationWindow.isVisible()) {
+    donationWindow.close();
+  } else {
+    createOrShowDonationWindow(tab || 'overlay');
+  }
+});
+
+ipcMain.on('set-donation-locked', (event, isLocked) => {
+  if (donationWindow && !donationWindow.isDestroyed()) {
+    donationWindow.setMovable(!isLocked);
+    donationWindow.setResizable(!isLocked);
+  }
+});
+
+// Broadcast events between windows (mainWindow <-> donationWindow)
+ipcMain.on('broadcast-donation-event', (event, data) => {
+  if (donationWindow && !donationWindow.isDestroyed() && event.sender !== donationWindow.webContents) {
+    donationWindow.webContents.send('donation-event', data);
+  }
+  if (mainWindow && !mainWindow.isDestroyed() && event.sender !== mainWindow.webContents) {
+    mainWindow.webContents.send('donation-event', data);
+  }
+});
+
+ipcMain.on('broadcast-medser-event', (event, data) => {
+  if (donationWindow && !donationWindow.isDestroyed() && event.sender !== donationWindow.webContents) {
+    donationWindow.webContents.send('medser-event', data);
+  }
+  if (mainWindow && !mainWindow.isDestroyed() && event.sender !== mainWindow.webContents) {
+    mainWindow.webContents.send('medser-event', data);
+  }
+});
+
+ipcMain.on('broadcast-leaderboard-update', (event, data) => {
+  if (donationWindow && !donationWindow.isDestroyed() && event.sender !== donationWindow.webContents) {
+    donationWindow.webContents.send('leaderboard-update', data);
+  }
+  if (mainWindow && !mainWindow.isDestroyed() && event.sender !== mainWindow.webContents) {
+    mainWindow.webContents.send('leaderboard-update', data);
+  }
+});
+
+ipcMain.on('broadcast-donation-urls', (event, urls) => {
+  if (donationWindow && !donationWindow.isDestroyed()) {
+    donationWindow.webContents.send('sync-donation-urls', urls);
+  }
+});
+
+ipcMain.handle('open-external-url', async (event, url) => {
+  try {
+    if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
+      await shell.openExternal(url);
+      return { success: true };
+    }
+  } catch (err) {
+    console.warn('Failed to open external url:', err);
+  }
+  return { success: false };
+});
+
 
 // --- Native Free TikTok LIVE Engine (Electron CDP WebSocket Interceptor) ---
 // 100% Free: Connects directly via hidden background session and decodes native Webcast Protobuf frames.

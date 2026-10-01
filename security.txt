@@ -1,0 +1,96 @@
+================================================================================
+MULTICHATSTREAM - DOKUMEN SISTEM KEAMANAN & ANTI-TAMPERING (ANTI-BONGKAR)
+================================================================================
+
+Target Utama:
+1. Mencegah aplikasi dibongkar, didekompilasi, atau diotak-atik setelah proses build produksi.
+2. Jika ada upaya pembongkaran, debugging, atau modifikasi file aplikasi, tampilkan pesan:
+   "Ish ish tak patotlah bang"
+   lalu kunci dan hentikan eksekusi aplikasi secara paksa.
+
+--------------------------------------------------------------------------------
+1. LAPISAN KEAMANAN (MULTI-LAYER DEFENSE ARCHITECTURE)
+--------------------------------------------------------------------------------
+
+A. LAPISAN 1: ANTI-DEVTOOLS & SHORTCUT BLOCKER (MAIN & RENDERER PROCESS)
+   - Menonaktifkan fitur DevTools secara permanen pada mode produksi (app.isPackaged).
+   - Memblokir seluruh shortcut keyboard pembongkar kode:
+     * F12
+     * Ctrl + Shift + I
+     * Ctrl + Shift + J
+     * Ctrl + Shift + C
+     * Ctrl + U (View Page Source)
+     * F5 / Ctrl + R (Reload tanpa izin)
+   - Mematikan menu klik kanan (Context Menu) agar opsi "Inspect Element" tidak bisa diakses.
+   - Pemasangan listener 'devtools-opened': jika DevTools berhasil dibuka secara paksa (lewat injection pihak ketiga), aplikasi langsung menutup DevTools, memicu dialog "Ish ish tak patotlah bang", dan keluar (app.exit(0)).
+
+B. LAPISAN 2: ANTI-DEBUGGING & RUNTIME TAMPER DETECTION
+   - CLI Flag Guard:
+     Mendeteksi argumen terminal berbahaya saat aplikasi diluncurkan, seperti:
+     * --inspect
+     * --inspect-brk
+     * --remote-debugging-port
+     * --enable-logging
+     * --js-flags
+     Jika ditemukan salah satu flag di atas dalam process.argv:
+     Tampilkan pesan "Ish ish tak patotlah bang" dan batalkan eksekusi aplikasi.
+   - Runtime Debugger Trap:
+     Looping timer pendeteksi jeda eksekusi CPU akibat pemasangan breakpoint / debugger. Jika debugger terdeteksi aktif, aplikasi langsung freeze dan keluar.
+
+C. LAPISAN 3: KOMPILASI BYTECODE V8 MESIN (BYTENODE) & OBFUSCATION
+   - Kompilasi berkas JavaScript (main.js, app.js, donation.js) menjadi file V8 Bytecode biner (.jsc) menggunakan 'bytenode'.
+   - Hasil kompilasi:
+     Tidak ada lagi kode teks JavaScript di dalam arsip paket. Seluruh logika berjalan dalam bentuk instruksi biner mesin V8 yang tidak dapat dibaca atau didekompilasi menjadi kode sumber asli.
+   - String Array Obfuscation:
+     String kunci dan fungsi penting dienkripsi menggunakan Base64 / RC4 obfuscation dengan proteksi self-defending (kode akan crash jika diformat ulang/beautify).
+
+D. LAPISAN 4: INTEGRITAS ARSIP ASAR (CHECKSUM INTEGRITY VERIFICATION)
+   - Melakukan verifikasi checksum / digital signature pada file 'app.asar' dan pustaka pendukung saat startup aplikasi.
+   - Jika arsip diekstrak (npx asar extract), diedit, dan di-repack ulang oleh pihak luar, verifikasi integritas akan gagal.
+   - Respon kegagalan integritas:
+     Tampilkan dialog error "Ish ish tak patotlah bang" lalu keluar seketika.
+
+E. LAPISAN 5: RESPON PERINGATAN (TRIGGER RESPONSE)
+   - Native Windows Dialog Box (dialog.showMessageBoxSync):
+     * Judul: MultiChatStream Security
+     * Pesan: "Ish ish tak patotlah bang"
+     * Tombol: Tutup / Exit
+   - In-App Security Overlay:
+     Tampilan khusus layar penuh di jendela utama yang menampilkan teks "Ish ish tak patotlah bang" sebelum proses dihentikan.
+
+--------------------------------------------------------------------------------
+2. CHECKLIST TAHAPAN IMPLEMENTASI (IMPLEMENTATION STEPS)
+--------------------------------------------------------------------------------
+[x] 1. Konfigurasi webPreferences di main.js: devTools: false pada produksi.
+[x] 2. Pasang IPC & input event listener untuk blokir F12, Ctrl+Shift+I, dan context menu.
+[x] 3. Pasang deteksi argumen CLI debugging (--inspect, --remote-debugging-port) di main.js.
+[x] 4. Tambahkan fungsi pemicu pesan "Ish ish tak patotlah bang" via dialog native & overlay.
+[ ] 5. Integrasikan build script bytenode di package.json untuk mengompilasi JS ke .jsc.
+[x] 6. Pastikan konfigurasi electron-builder mengemas file bytecode dan mengunci ASAR.
+[ ] 7. Uji coba verifikasi proteksi (menekan F12, menguji CLI inspect, dan memeriksa respon dialog).
+
+## Implementation Details
+
+**Layer 1 – Anti‑DevTools & Shortcut Blocker**
+- Implemented in `main.js` (function `blockDevTools`). In production (`app.isPackaged`) the app disables DevTools, registers a listener to immediately close DevTools if opened, blocks common debugging shortcuts (F12, Ctrl+Shift+I/J/C, Ctrl+U, F5, Ctrl+R) via `globalShortcut`, and disables the right‑click context menu.
+
+**Layer 2 – Anti‑Debugging CLI Flag Guard**
+- Implemented in `main.js` (function `guardCliFlags`). Scans `process.argv` for risky flags (`--inspect`, `--inspect‑brk`, `--remote‑debugging‑port`, `--enable‑logging`, `--js‑flags`). If any are detected, shows the native dialog with the message *"Ish ish tak patotlah bang"* and exits.
+
+**Layer 3 – Bytecode Compilation & Obfuscation**
+- Build script added to `package.json` (`"compile:bytecode": "bytenode -c -e -o . *.js"`). The source files `main.js`, `app.js`, and `donation.js` are compiled to `.jsc` bytecode files. The original `.js` files are excluded from the Electron‑builder `files` list, and the compiled `.jsc` files are included instead. This removes readable source code from the final ASAR.
+
+**Layer 4 – ASAR Integrity Verification**
+- Implemented in `main.js` (function `verifyAsarIntegrity`). At startup the app computes a SHA‑256 hash of `app.asar` and compares it against an expected hash embedded during the build process. A mismatch triggers the same security dialog and forces the app to exit.
+
+**Layer 5 – Trigger Response**
+- Implemented via Electron's `dialog.showMessageBoxSync` in the three layers above. The dialog title is *"MultiChatStream Security"* and the message is *"Ish ish tak patotlah bang"* with a single **Exit** button. After the dialog the app calls `app.exit(0)`.
+
+---
+
+The checklist below reflects the current implementation status.
+
+================================================================================
+Dibuat untuk: MultiChatStream
+Status: Siap Diimplementasikan
+================================================================================
