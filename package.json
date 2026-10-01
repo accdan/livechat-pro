@@ -1,28 +1,33 @@
 {
-  "name": "livechat-pro-95",
+  "name": "multichatstream",
   "version": "1.0.0",
-  "description": "Retro Windows 95 Multi-Platform Stream Chat Aggregator",
+  "description": "Multi-Platform Live Stream Chat Overlay & Aggregator (YouTube, Twitch, TikTok, Discord)",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build:portable": "npx electron-builder --win portable"
+    "build:portable": "npx electron-builder --win portable",
+    "build:installer": "npx electron-builder --win nsis",
+    "build:all": "npx electron-builder --win portable nsis"
   },
   "keywords": [
+    "multichatstream",
     "livechat",
+    "stream-overlay",
     "youtube",
     "twitch",
-    "win95",
-    "retro"
+    "tiktok",
+    "discord"
   ],
-  "author": "Antigravity Systems",
+  "author": "MultiChatStream",
   "license": "MIT",
   "devDependencies": {
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.livechatpro.95",
-    "productName": "LiveChat Pro",
+    "appId": "com.multichatstream.app",
+    "productName": "MultiChatStream",
+    "copyright": "Copyright © 2026 MultiChatStream",
     "files": [
       "index.html",
       "style.css",
@@ -31,10 +36,25 @@
       "node_modules/**/*"
     ],
     "win": {
-      "target": "portable"
+      "target": [
+        "portable",
+        "nsis"
+      ],
+      "certificateFile": "certs/LiveChatPro.pfx",
+      "certificatePassword": "LiveChatPro2026!",
+      "signingHashAlgorithms": [
+        "sha256"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "multichatstream-installer.exe"
     },
     "portable": {
-      "artifactName": "LiveChatPro-Portable.exe"
+      "artifactName": "multichatstream-portable.exe"
     }
   },
   "dependencies": {

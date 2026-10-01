@@ -1,31 +1,37 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LiveChat Pro - Stream Overlay</title>
+  <title>MultiChatStream - Stream Overlay</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;700&family=Poppins:wght@400;600;700&family=Roboto:wght@400;500;700&family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=K2D:wght@400;600;700;800&family=Outfit:wght@400;600;700&family=Poppins:wght@400;600;700&family=Roboto:wght@400;500;700&family=Share+Tech+Mono&family=VT323&display=swap"
+    rel="stylesheet">
 </head>
+
 <body class="bg-transparent">
 
   <!-- CRT Scanlines Overlay FX (Optional) -->
   <div id="crtOverlay" class="crt-overlay hidden"></div>
 
-  <!-- Main Container: Chat Column on Left, Settings Panel on Right -->
+  <!-- Main Container: Chat Column with In-Window Settings Overlay -->
   <div id="appContainer" class="overlay-container">
-    
-    <!-- Left: Chat Column -->
+
+    <!-- Chat Column -->
     <div id="chatColumn" class="chat-column">
-      
-      <!-- Top Rectangular Bar (Height: 26px) -->
+
+      <!-- Top Pill Bar (Figma Pastel Pill Theme: #ff9c9e, multichatstream Logo, Blue Pill Controls) -->
       <header id="topBar" class="overlay-bar">
         <div class="bar-left">
-          <span class="bar-icon">💬</span>
-          <span class="bar-title">LiveChat</span>
-          <span class="status-dot online" id="barStatusDot" title="Status: Online"></span>
+          <div class="bar-logo-group" title="MultiChatStream">
+            <span class="logo-multi">multichat</span><span class="logo-stream">stream</span>
+          </div>
+          <span class="status-dot online" id="barStatusDot" title="Status: Online" role="status"
+            aria-label="Online"></span>
           <span class="bar-badge" id="barStreamBadge">0 streams</span>
         </div>
 
@@ -34,25 +40,59 @@
         </div>
 
         <div class="bar-right">
+          <!-- Refresh Chat Button -->
+          <button class="bar-btn btn-refresh" id="barRefreshBtn" onclick="refreshChat()"
+            title="Segarkan Koneksi Chat (Refresh)" aria-label="Refresh Chat">
+            <svg class="bar-icon-svg refresh-svg" viewBox="0 0 24 24" width="10.5" height="10.5" fill="none"
+              stroke="#000000" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+              <path d="M3 3v5h5"></path>
+              <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path>
+              <path d="M16 16h5v5"></path>
+            </svg>
+          </button>
+
           <!-- Lock Position Toggle -->
-          <button class="bar-btn btn-lock" id="barLockBtn" onclick="toggleLockPosition()" title="Kunci Posisi (Lock Orientation)">
-            <span id="lockIcon">🔓</span>
+          <button class="bar-btn btn-lock" id="barLockBtn" onclick="toggleLockPosition()"
+            title="Kunci Posisi (Lock Orientation)" aria-label="Lock Window Position">
+            <svg id="lockSvg" class="bar-icon-svg lock-svg" viewBox="0 0 24 24" width="10.5" height="10.5" fill="none"
+              stroke="#000000" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path id="lockShackle" d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+            </svg>
           </button>
 
           <!-- Pinned messages shortcut -->
-          <button class="bar-btn" id="barPinBtn" onclick="togglePinnedDrawer()" title="Lihat Pesan Tersemat">
-            📌 <span id="pinnedCount">0</span>
+          <button class="bar-btn btn-pin" id="barPinBtn" onclick="togglePinnedDrawer()" title="Lihat Pesan Tersemat"
+            aria-label="Pinned Messages">
+            <svg class="bar-icon-svg pin-svg" viewBox="0 0 24 24" width="10.5" height="10.5" fill="none"
+              stroke="#000000" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="17" x2="12" y2="22"></line>
+              <path
+                d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.89A2 2 0 0 1 15 10.77V6l1-2H8l1 2v4.77a2 2 0 0 1-1.11 1.79l-1.78.89A2 2 0 0 0 5 15.24V17z">
+              </path>
+            </svg>
+            <span id="pinnedCount">0</span>
           </button>
 
-          <!-- Setting button (opens settings side panel on the right) -->
-          <button class="bar-btn btn-settings" id="barSettingsBtn" onclick="toggleSettingsModal()" title="Buka Pengaturan di Kanan">
-            <span class="gear-icon">⚙️</span>
-            <span class="settings-text">Settings</span>
+          <!-- Settings Button (Pill Blue) -->
+          <button class="bar-btn btn-settings" id="barSettingsBtn" onclick="toggleSettingsModal()"
+            title="Buka Pengaturan" aria-label="Open settings">
+            <svg class="gear-svg" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="#000000"
+              stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+              </path>
+            </svg>
+            <span class="settings-text">settings</span>
           </button>
 
-          <!-- Frameless window controls -->
-          <button class="bar-btn btn-win-ctrl" onclick="minimizeAppWindow()" title="Minimize">─</button>
-          <button class="bar-btn btn-win-ctrl btn-close-app" onclick="closeAppWindow()" title="Tutup">✕</button>
+          <!-- Frameless window controls (Square Blue) -->
+          <button class="bar-btn btn-win-ctrl btn-min-app" onclick="minimizeAppWindow()" title="Minimize"
+            aria-label="Minimize">─</button>
+          <button class="bar-btn btn-win-ctrl btn-close-app" onclick="closeAppWindow()" title="Tutup"
+            aria-label="Close">✕</button>
         </div>
       </header>
 
@@ -66,12 +106,60 @@
           </div>
         </div>
         <div id="pinnedContainer" class="pinned-list">
-          <div class="empty-pinned-msg">Belum ada pesan tersemat. Klik 📌 pada baris pesan untuk menyematkannya di sini.</div>
+          <div class="empty-pinned-msg">Belum ada pesan tersemat. Klik 📌 pada baris pesan untuk menyematkannya di sini.
+          </div>
+        </div>
+      </div>
+
+      <!-- Leaderboard Drawer (Collapsible) -->
+      <div id="leaderboardDrawer" class="leaderboard-drawer hidden">
+        <div class="leaderboard-header">
+          <span>🏆 Top Donatur Sesi Ini</span>
+          <div class="leaderboard-actions">
+            <button class="btn-micro" onclick="clearLeaderboard()">Reset</button>
+            <button class="btn-micro btn-close-drawer" onclick="toggleLeaderboardDrawer()">✕</button>
+          </div>
+        </div>
+        <div id="leaderboardContainer" class="leaderboard-list">
+          <div class="empty-leaderboard-msg">Belum ada donasi tercatat sesi ini.</div>
         </div>
       </div>
 
       <!-- Livechat Feed (Transparan di bawah BAR) -->
       <main class="chat-viewport-container">
+        <!-- Donation Alert Popup (Saweria, Tako, TikTok Gift, YT Super Chat) -->
+        <div id="donationAlertContainer" class="donation-alert-container hidden">
+          <div class="donation-alert-card" id="donationAlertCard">
+            <div class="donation-badge-row">
+              <span class="donation-platform-badge" id="donationPlatformBadge">🎁 DONASI</span>
+              <span class="donation-time" id="donationAlertTime">Baru saja</span>
+            </div>
+            <div class="donation-main-info">
+              <span class="donation-donor" id="donationAlertDonor">Donatur</span>
+              <span class="donation-amount" id="donationAlertAmount">Rp 50.000</span>
+            </div>
+            <div class="donation-message" id="donationAlertMessage">Semangat streaming-nya!</div>
+          </div>
+        </div>
+
+        <!-- Medser (Media Share) Alert Popup -->
+        <div id="medserAlertContainer" class="medser-alert-container hidden">
+          <div class="medser-alert-card" id="medserAlertCard">
+            <div class="medser-badge-row">
+              <span class="medser-badge">🎬 MEDIA SHARE</span>
+              <span class="medser-donor" id="medserAlertDonor">User</span>
+            </div>
+            <div class="medser-title-row">
+              <span class="medser-icon">🎵</span>
+              <span class="medser-title" id="medserAlertTitle">Nama Media / Lagu</span>
+            </div>
+            <div class="medser-footer-row">
+              <span class="medser-amount" id="medserAlertAmount">Rp 25.000</span>
+              <span class="medser-duration" id="medserAlertDuration">⏱ 01:30</span>
+            </div>
+          </div>
+        </div>
+
         <div id="chatFeed" class="chat-feed transparent-feed">
           <!-- Chat bubbles rendered dynamically here -->
         </div>
@@ -82,549 +170,582 @@
         </button>
       </main>
 
+      <!-- Live Donation Overlay Browser Sources (Tako, Saweria, Custom) -->
+      <div id="liveDonationOverlaysContainer" class="live-donation-overlays-container" aria-hidden="true">
+        <iframe id="takoOverlayFrame" class="donation-overlay-iframe hidden" title="Tako Alert Overlay" allow="autoplay"
+          referrerpolicy="no-referrer"></iframe>
+        <iframe id="saweriaOverlayFrame" class="donation-overlay-iframe hidden" title="Saweria Alert Overlay"
+          allow="autoplay" referrerpolicy="no-referrer"></iframe>
+        <iframe id="customOverlayFrame" class="donation-overlay-iframe hidden" title="Custom Alert Overlay"
+          allow="autoplay" referrerpolicy="no-referrer"></iframe>
+      </div>
+
     </div>
 
-    <!-- Right: Settings Side Panel (Muncul di Kanan Chat agar Live Preview Terlihat) -->
-    <aside id="settingsPanel" class="settings-side-panel hidden">
-      
-      <!-- Panel Header -->
-      <div class="settings-header">
-        <div class="settings-title">
-          <span class="settings-icon">⚙️</span>
-          <span>Pengaturan LiveChat</span>
-        </div>
-        <button class="btn-close-modal" onclick="closeSettingsModal()" title="Tutup Pengaturan">✕</button>
+    <!-- Settings Side Panel (Exact Figma Template: Blue #9db0ff base, Pink #ff9c9e body at top: 18px) -->
+    <aside id="settingsPanel" class="settings-side-panel hidden" aria-labelledby="settings-title">
+      <!-- Layer 1: Rectangle (Blue #9db0ff, border-radius: 10px, border: 1px solid #000) -->
+      <div class="settings-rectangle-bg" aria-hidden="true"></div>
+
+      <!-- Layer 2: Rectangle-2 (Pink #ff9c9e, top: 18px, border-radius: 10px, border: 1px solid #000) -->
+      <div class="settings-rectangle-pink" aria-hidden="true"></div>
+
+      <!-- Top Header Bar (18px high, exposed Blue #9db0ff background) -->
+      <div class="settings-top-bar">
+        <h1 class="settings-title" id="settings-title">settings</h1>
+        <button class="settings-info-btn" id="btnSettingsInfo" type="button" onclick="toggleSettingsInfoModal(true)"
+          title="Informasi & Bantuan">
+          info ?
+        </button>
+        <button class="settings-close-btn" type="button" onclick="closeSettingsModal()" aria-label="Close settings">
+          <svg class="settings-close-svg" viewBox="0 0 24 24" width="8" height="8" fill="none" stroke="#000000"
+            stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </div>
 
-      <!-- Panel Navigation Tabs -->
-      <div class="settings-nav">
-        <button class="tab-btn active" id="tabNavStreams" onclick="switchSettingsTab('tabStreams')">📡 Stream</button>
-        <button class="tab-btn" id="tabNavDisplay" onclick="switchSettingsTab('tabDisplay')">🎨 Tampilan</button>
-        <button class="tab-btn" id="tabNavControls" onclick="switchSettingsTab('tabControls')">⚡ Kontrol</button>
-        <button class="tab-btn" id="tabNavFilter" onclick="switchSettingsTab('tabFilter')">🔍 Filter</button>
-        <button class="tab-btn" id="tabNavAbout" onclick="switchSettingsTab('tabAbout')">ℹ️ Info</button>
-      </div>
+      <!-- Settings Content Container (Inside the Pink Rectangle-2 starting at top: 18px) -->
+      <div class="settings-content-wrap">
+        <!-- Panel Navigation Tabs -->
+        <nav class="settings-nav" aria-label="Kategori Pengaturan">
+          <button class="tab-btn active" id="tabNavStreams" onclick="switchSettingsTab('tabStreams')">📡 Stream</button>
+          <button class="tab-btn" id="tabNavDisplay" onclick="switchSettingsTab('tabDisplay')">🎨 Tampilan</button>
+          <button class="tab-btn" id="tabNavDonation" onclick="switchSettingsTab('tabDonation')">🎁 Donasi</button>
+          <button class="tab-btn" id="tabNavControls" onclick="switchSettingsTab('tabControls')">⚡ Kontrol</button>
+        </nav>
 
-      <!-- Panel Content Body -->
-      <div class="settings-body">
-        
-        <!-- Tab 1: Stream & Login Connection -->
-        <div id="tabStreams" class="tab-pane active">
-          
-          <!-- Akun Streamer (Auto-Connect & Auto-Detect) -->
-          <div class="section-box account-login-box">
-            <div class="section-header-split">
-              <h4 class="section-title">🔑 Akun Streamer (Auto-Connect)</h4>
-              <span class="badge-optional">Opsional</span>
-            </div>
-            <p class="section-desc">
-              Simpan akun Anda di bawah ini agar saat live streaming, LiveChat Pro <strong>otomatis terhubung</strong> tanpa perlu salin link atau ketik username setiap kali membuka aplikasi.
-            </p>
+        <!-- Panel Content Body -->
+        <div class="settings-body">
 
-            <div class="auto-connect-toggle-bar">
-              <label class="switch-row">
-                <input type="checkbox" id="chkAutoConnectStreams" checked onchange="toggleAutoConnectSetting(this.checked)">
-                <span class="switch-title">⚡ Otomatis sambungkan akun saat aplikasi dibuka</span>
-              </label>
-            </div>
+          <!-- Tab 1: Stream & Akun -->
+          <div id="tabStreams" class="tab-pane active">
 
-            <div class="account-cards-grid">
-              
-              <!-- Twitch Account Card -->
-              <div class="account-card" id="accCardTwitch">
-                <div class="acc-card-top">
-                  <span class="acc-logo tw">👾 Twitch</span>
-                  <span class="acc-status-badge" id="accTwitchStatus">Belum Disimpan</span>
-                </div>
-                <div class="acc-user-display" id="accTwitchUser">Tidak ada akun tersimpan</div>
-                <div class="acc-actions">
-                  <button class="btn-action tw-btn" onclick="openLoginModal('twitch')">
-                    <span id="accTwitchBtnText">🔑 Login / Simpan</span>
-                  </button>
-                  <button class="btn-micro danger hidden" id="accTwitchLogout" onclick="logoutAccount('twitch')">Hapus</button>
-                </div>
+            <div class="section-box compact-box">
+              <div class="section-header-split">
+                <h4 class="section-title">🔑 Akun Stream (Auto-Connect & Standby)</h4>
+              </div>
+              <div class="auto-connect-toggle-bar mb-2">
+                <label class="switch-row">
+                  <input type="checkbox" id="chkAutoConnectStreams" checked
+                    onchange="toggleAutoConnectSetting(this.checked)">
+                  <span class="switch-title">⚡ Otomatis sambungkan akun saat aplikasi dibuka</span>
+                </label>
               </div>
 
-              <!-- YouTube Account Card -->
-              <div class="account-card" id="accCardYouTube">
-                <div class="acc-card-top">
-                  <span class="acc-logo yt">▶ YouTube</span>
-                  <span class="acc-status-badge" id="accYtStatus">Belum Disimpan</span>
+              <!-- Compact Account Rows -->
+              <div class="compact-accounts-list">
+                <!-- Twitch -->
+                <div class="compact-acc-row" id="accCardTwitch">
+                  <div class="acc-row-left">
+                    <span class="acc-logo tw">👾 Twitch</span>
+                    <span class="acc-username-text" id="accTwitchUser">Tidak ada akun</span>
+                  </div>
+                  <div class="acc-row-right">
+                    <span class="acc-status-badge" id="accTwitchStatus">Belum Disimpan</span>
+                    <button class="btn-micro primary" onclick="openLoginModal('twitch')">
+                      <span id="accTwitchBtnText">Ubah</span>
+                    </button>
+                    <button class="btn-micro danger hidden" id="accTwitchLogout"
+                      onclick="logoutAccount('twitch')">✕</button>
+                  </div>
                 </div>
-                <div class="acc-user-display" id="accYtUser">Tidak ada channel tersimpan</div>
-                <div class="acc-actions">
-                  <button class="btn-action yt-btn" onclick="openLoginModal('youtube')">
-                    <span id="accYtBtnText">🔑 Login / Simpan</span>
-                  </button>
-                  <button class="btn-micro danger hidden" id="accYtLogout" onclick="logoutAccount('youtube')">Hapus</button>
+
+                <!-- YouTube -->
+                <div class="compact-acc-row" id="accCardYouTube">
+                  <div class="acc-row-left">
+                    <span class="acc-logo yt">▶ YouTube</span>
+                    <span class="acc-username-text" id="accYtUser">Tidak ada channel</span>
+                  </div>
+                  <div class="acc-row-right">
+                    <span class="acc-status-badge" id="accYtStatus">Belum Disimpan</span>
+                    <button class="btn-micro primary" onclick="openLoginModal('youtube')">
+                      <span id="accYtBtnText">Ubah</span>
+                    </button>
+                    <button class="btn-micro danger hidden" id="accYtLogout"
+                      onclick="logoutAccount('youtube')">✕</button>
+                  </div>
+                </div>
+
+                <!-- TikTok -->
+                <div class="compact-acc-row" id="accCardTikTok">
+                  <div class="acc-row-left">
+                    <span class="acc-logo tt">🎵 TikTok</span>
+                    <span class="acc-username-text" id="accTikTokUser">Tidak ada akun</span>
+                  </div>
+                  <div class="acc-row-right">
+                    <span class="acc-status-badge" id="accTikTokStatus">Belum Disimpan</span>
+                    <button class="btn-micro primary" onclick="openLoginModal('tiktok')">
+                      <span id="accTikTokBtnText">Ubah</span>
+                    </button>
+                    <button class="btn-micro danger hidden" id="accTikTokLogout"
+                      onclick="logoutAccount('tiktok')">✕</button>
+                  </div>
+                </div>
+
+                <!-- Discord -->
+                <div class="compact-acc-row" id="accCardDiscord">
+                  <div class="acc-row-left">
+                    <span class="acc-logo dc">🎮 Discord</span>
+                    <span class="acc-username-text" id="accDcUser">Tidak ada bot/channel</span>
+                  </div>
+                  <div class="acc-row-right">
+                    <span class="acc-status-badge" id="accDcStatus">Belum Disimpan</span>
+                    <button class="btn-micro primary" onclick="openLoginModal('discord')">
+                      <span id="accDcBtnText">Ubah</span>
+                    </button>
+                    <button class="btn-micro danger hidden" id="accDcLogout"
+                      onclick="logoutAccount('discord')">✕</button>
+                  </div>
                 </div>
               </div>
+            </div>
 
-              <!-- TikTok Account Card -->
-              <div class="account-card" id="accCardTikTok">
-                <div class="acc-card-top">
-                  <span class="acc-logo tt">🎵 TikTok</span>
-                  <span class="acc-status-badge" id="accTikTokStatus">Belum Disimpan</span>
-                </div>
-                <div class="acc-user-display" id="accTikTokUser">Tidak ada akun tersimpan</div>
-                <div class="acc-actions">
-                  <button class="btn-action tt-btn" onclick="openLoginModal('tiktok')">
-                    <span id="accTikTokBtnText">🔑 Login / Simpan</span>
+            <!-- Collab Stream (Multi-Chat Partner) -->
+            <div class="section-box compact-box collab-box">
+              <div class="section-header-split">
+                <h4 class="section-title">
+                  🤝 Collab Stream (Chat Partner)
+                  <span id="collabCountBadge" class="collab-count-badge" style="display:none;">0</span>
+                </h4>
+                <button class="btn-action primary" onclick="openCollabModal()">
+                  ➕ Add More Stream
+                </button>
+              </div>
+              <p class="section-desc">
+                Gabungkan live chat dari channel partner streaming Anda (YouTube, Twitch, TikTok, Discord) agar muncul
+                bersamaan di feed ini.
+              </p>
+              <div id="collabStreamsList" class="collab-streams-list mt-1">
+                <span class="no-streams-notice">Belum ada partner collab yang terhubung.</span>
+              </div>
+            </div>
+
+            <!-- Quick Connect URL / Username -->
+            <div class="section-box compact-box">
+              <h4 class="section-title">Hubungkan Manual / URL Langsung</h4>
+              <div class="quick-connect-form">
+                <input type="text" id="streamUrlInput" class="form-input"
+                  placeholder="Tempel URL YouTube / Twitch / TikTok..." onkeypress="handleUrlKeyPress(event)">
+                <div class="form-row mt-1">
+                  <select id="platformSelect" class="form-select">
+                    <option value="auto">Auto-Detect Platform</option>
+                    <option value="youtube">YouTube Live</option>
+                    <option value="twitch">Twitch Stream</option>
+                    <option value="tiktok">TikTok Live</option>
+                    <option value="discord">Discord Channel</option>
+                  </select>
+                  <button class="btn-action primary" onclick="connectFromInput()">
+                    <span>🔌 Connect</span>
                   </button>
-                  <button class="btn-micro danger hidden" id="accTikTokLogout" onclick="logoutAccount('tiktok')">Hapus</button>
                 </div>
               </div>
-
             </div>
+
+            <!-- Stream Aktif -->
+            <div class="section-box compact-box">
+              <div class="section-header-split">
+                <h4 class="section-title">Stream Aktif</h4>
+                <button class="btn-chip danger" onclick="disconnectAllStreams()">Putuskan Semua</button>
+              </div>
+              <div id="connectedStreamsContainer" class="stream-chips-container">
+                <span class="no-streams-notice">Tidak ada stream aktif. Hubungkan akun di atas.</span>
+              </div>
+            </div>
+
           </div>
 
-          <!-- Divider between Auto-Connect and Manual -->
-          <div class="section-separator">
-            <span>Atau Hubungkan Manual (Link & Username)</span>
-          </div>
+          <!-- Tab 2: Tampilan & Warna -->
+          <div id="tabDisplay" class="tab-pane">
 
-          <!-- Twitch Connection Card -->
-          <div class="platform-card card-twitch">
-            <div class="platform-header">
-              <span class="platform-badge-logo tw">👾 Twitch</span>
-              <span class="platform-status-pill" id="twitchStatusPill">Siap Connect</span>
-            </div>
-            <div class="platform-guide">
-              <strong>Cara Menghubungkan Twitch Chat:</strong>
-              <p>Cukup masukkan nama channel Twitch streamer yang sedang live (atau channel Anda sendiri). Terhubung langsung secara real-time via Twitch IRC WebSocket tanpa API key rumit.</p>
-            </div>
-            <div class="platform-input-row">
-              <input type="text" id="twitchChannelInput" class="form-input" 
-                     placeholder="contoh: shroud atau channelname" 
-                     onkeypress="if(event.key==='Enter') connectTwitchFromCard()">
-              <button class="btn-action tw-btn" onclick="connectTwitchFromCard()">
-                <span>👾 Hubungkan</span>
-              </button>
-            </div>
-          </div>
+            <div class="section-box compact-box">
+              <h4 class="section-title">Latar Belakang (Background)</h4>
+              <div class="theme-buttons-grid">
+                <button class="theme-btn active" id="themeBtnClear" onclick="applyPresetBackground('transparent')">
+                  <span class="theme-preview clear-preview"></span>
+                  <span>Transparan</span>
+                </button>
+                <button class="theme-btn" id="themeBtnGlass" onclick="applyPresetBackground('glass')">
+                  <span class="theme-preview glass-preview"></span>
+                  <span>Kaca Gelap</span>
+                </button>
+                <button class="theme-btn" id="themeBtnSolid" onclick="applyPresetBackground('solid')">
+                  <span class="theme-preview solid-preview"></span>
+                  <span>Hitam Pekat</span>
+                </button>
+                <button class="theme-btn" id="themeBtnGreen" onclick="applyPresetBackground('green')">
+                  <span class="theme-preview green-preview"></span>
+                  <span>Green Screen</span>
+                </button>
+              </div>
 
-          <!-- YouTube Connection Card -->
-          <div class="platform-card card-youtube">
-            <div class="platform-header">
-              <span class="platform-badge-logo yt">▶ YouTube Live</span>
-              <span class="platform-status-pill" id="ytStatusPill">Siap Connect</span>
+              <div class="custom-color-row mt-2">
+                <div class="color-picker-group">
+                  <label for="bgColorPicker">Warna:</label>
+                  <div class="picker-wrapper">
+                    <input type="color" id="bgColorPicker" value="#000000" onchange="onCustomBgColorChange(this.value)">
+                    <span id="bgColorHex" class="color-hex-text">#000000</span>
+                  </div>
+                </div>
+                <div class="slider-group">
+                  <div class="slider-header">
+                    <span>Opasitas Latar:</span>
+                    <strong id="bgOpacityVal">0%</strong>
+                  </div>
+                  <input type="range" id="bgOpacitySlider" class="form-range" min="0" max="100" value="0"
+                    oninput="onBgOpacityChange(this.value)">
+                </div>
+              </div>
             </div>
-            <div class="platform-guide">
-              <strong>Cara Menghubungkan YouTube Live Chat:</strong>
-              <ol class="guide-steps">
-                <li>Buka live stream Anda di YouTube Studio atau tonton video live YouTube.</li>
-                <li>Salin link video atau popout chat (misal: <code>youtube.com/watch?v=...</code> atau <code>youtube.com/live/...</code>).</li>
-                <li>Tempelkan ke kolom di bawah, lalu klik <strong>Hubungkan</strong>.</li>
-              </ol>
-            </div>
-            <div class="platform-input-row">
-              <input type="text" id="youtubeUrlInput" class="form-input" 
-                     placeholder="https://www.youtube.com/watch?v=..." 
-                     onkeypress="if(event.key==='Enter') connectYtFromCard()">
-              <button class="btn-action yt-btn" onclick="connectYtFromCard()">
-                <span>▶ Hubungkan</span>
-              </button>
-            </div>
-          </div>
 
-          <!-- TikTok Connection Card -->
-          <div class="platform-card card-tiktok">
-            <div class="platform-header">
-              <span class="platform-badge-logo tt">🎵 TikTok Live</span>
-              <span class="platform-status-pill" id="tiktokStatusPill">Siap Connect</span>
-            </div>
-            <div class="platform-guide">
-              <strong>Cara Menghubungkan TikTok Live Chat:</strong>
-              <p>Pastikan akun TikTok Anda sedang LIVE publik. Masukkan username TikTok (contoh: <code>@streamername</code>) untuk menghubungkan chat komentar live.</p>
-            </div>
-            <div class="platform-input-row">
-              <input type="text" id="tiktokUsernameInput" class="form-input" 
-                     placeholder="@username (sedang LIVE)" 
-                     onkeypress="if(event.key==='Enter') connectTikTokFromCard()">
-              <button class="btn-action tt-btn" onclick="connectTikTokFromCard()">
-                <span>🎵 Hubungkan</span>
-              </button>
-            </div>
-          </div>
+            <!-- Bubble Chat Design -->
+            <div class="section-box compact-box">
+              <h4 class="section-title">Desain Bubble Chat</h4>
 
-          <!-- Quick URL Connector & Active Streams -->
-          <div class="section-box">
-            <h4 class="section-title">URL Langsung / Auto-Detect</h4>
-            <div class="input-form-group">
-              <input type="text" id="streamUrlInput" class="form-input" 
-                     placeholder="Tempel URL YouTube / Twitch apa saja..." 
-                     onkeypress="handleUrlKeyPress(event)">
-              <div class="form-row">
-                <select id="platformSelect" class="form-select">
-                  <option value="auto">Auto-Detect Platform</option>
-                  <option value="youtube">YouTube Live</option>
-                  <option value="twitch">Twitch Stream</option>
+              <div class="slider-group">
+                <div class="slider-header">
+                  <span>Opasitas Bubble:</span>
+                  <strong id="bubbleOpacityVal">78%</strong>
+                </div>
+                <input type="range" id="bubbleOpacitySlider" class="form-range" min="0" max="100" value="78"
+                  oninput="onBubbleOpacityChange(this.value)">
+              </div>
+
+              <div class="slider-group">
+                <div class="slider-header">
+                  <span>Lengkungan Sudut:</span>
+                  <strong id="bubbleRadiusVal">12px</strong>
+                </div>
+                <input type="range" id="bubbleRadiusSlider" class="form-range" min="0" max="24" value="12"
+                  oninput="onBubbleRadiusChange(this.value)">
+              </div>
+
+              <div class="setting-toggle-row">
+                <div>
+                  <strong>Border Halus</strong>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="chkBubbleBorder" checked onchange="onBubbleBorderToggle(this.checked)">
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Font -->
+            <div class="section-box compact-box">
+              <h4 class="section-title">Font & Ukuran</h4>
+              <div class="font-select-group mb-2">
+                <select id="fontSelect" class="form-select" onchange="onFontFamilyChange(this.value)">
+                  <option value="'Inter', sans-serif">Inter (Modern & Bersih)</option>
+                  <option value="'Poppins', sans-serif">Poppins (Rounded)</option>
+                  <option value="'Outfit', sans-serif">Outfit (Streamer Tech)</option>
+                  <option value="'Roboto', sans-serif">Roboto (Neutral)</option>
+                  <option value="'Share Tech Mono', monospace">Share Tech Mono (Cyber Mono)</option>
+                  <option value="'VT323', monospace">VT323 (8-bit Pixel)</option>
+                  <option value="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">System UI</option>
                 </select>
-                <button class="btn-action primary" onclick="connectFromInput()">
-                  <span>🔌 Connect</span>
+              </div>
+
+              <div class="slider-group">
+                <div class="slider-header">
+                  <span>Ukuran Teks:</span>
+                  <strong id="fontSizeVal">14px</strong>
+                </div>
+                <input type="range" id="fontSizeSlider" class="form-range" min="11" max="24" value="14"
+                  oninput="onFontSizeChange(this.value)">
+              </div>
+
+              <button class="btn-action secondary full-width mt-2" onclick="resetDefaultAppearance()">
+                🔄 Reset Tampilan Default
+              </button>
+            </div>
+
+          </div>
+
+          <!-- Tab 3: Donasi & Alert (Tako, Saweria, TikTok, YouTube) -->
+          <div id="tabDonation" class="tab-pane">
+            <div class="section-box compact-box">
+              <div class="section-header-split">
+                <h4 class="section-title">🎁 Donasi & Alert (Tako / Saweria / Gifts)</h4>
+                <span class="badge-optional">Modul Terpisah</span>
+              </div>
+              <p class="section-desc">
+                Menampilkan animasi popup notifikasi donasi, media share (Medser), dan Leaderboard Top Donatur saat
+                streaming.
+              </p>
+
+              <div class="setting-toggle-row">
+                <div>
+                  <strong>Popup Alert Donasi</strong>
+                  <p class="setting-hint">Muncul di atas chat saat ada donasi / gift masuk</p>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="chkDonationAlert" checked
+                    onchange="toggleDonationAlertSetting(this.checked)">
+                  <span class="slider"></span>
+                </label>
+              </div>
+
+              <div class="setting-toggle-row">
+                <div>
+                  <strong>Popup Medser (Media Share)</strong>
+                  <p class="setting-hint">Notifikasi judul video / lagu media share</p>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="chkMedserAlert" checked onchange="toggleMedserAlertSetting(this.checked)">
+                  <span class="slider"></span>
+                </label>
+              </div>
+
+              <div class="setting-toggle-row">
+                <div>
+                  <strong>Widget Mini Leaderboard</strong>
+                  <p class="setting-hint">Tampilkan ranking donatur teratas sesi live ini</p>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="chkLeaderboard" checked onchange="toggleLeaderboardSetting(this.checked)">
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Top Donatur / Leaderboard Section -->
+            <div class="section-box compact-box">
+              <div class="section-header-split">
+                <h4 class="section-title">
+                  🏆 Top Donatur Sesi Ini
+                  <span class="collab-count-badge" id="leaderboardBadge">0</span>
+                </h4>
+                <button class="btn-micro" onclick="clearLeaderboard()">Reset</button>
+              </div>
+              <p class="section-desc">
+                Buka panel leaderboard ranking donatur teratas selama sesi live streaming ini berlangsung.
+              </p>
+              <button class="btn-action primary full-width mt-1" onclick="toggleLeaderboardDrawer()">
+                🏆 Buka Panel Top Donatur
+              </button>
+            </div>
+
+            <!-- Tako & Saweria Live Overlay Integration -->
+            <div class="section-box compact-box">
+              <div class="section-header-split">
+                <h4 class="section-title">🔗 Integrasi Alert Overlay (Tako & Saweria)</h4>
+                <button class="btn-micro" onclick="reloadAllDonationOverlays()" title="Muat Ulang Semua Overlay">🔄
+                  Reload All</button>
+              </div>
+              <p class="section-desc">
+                Masukkan URL Browser Source / Alert Overlay dari dashboard Tako atau Saweria. Saat dites lewat
+                Tako/Saweria, animasi alert langsung tampil dan bersuara di atas chat!
+              </p>
+
+              <!-- Tako URL Input & Status -->
+              <div class="input-form-group mt-1">
+                <div class="overlay-status-row">
+                  <label class="small-label">URL Alert / Overlay Tako:</label>
+                  <span class="overlay-status-badge inactive" id="takoStatusBadge">⚪ Belum disetel</span>
+                </div>
+                <input type="text" id="takoOverlayUrl" class="form-input" placeholder="https://tako.id/overlay/..."
+                  oninput="onDonationUrlInputChanged()" onchange="saveDonationIntegrationUrls(false)">
+              </div>
+
+              <!-- Saweria URL Input & Status -->
+              <div class="input-form-group mt-2">
+                <div class="overlay-status-row">
+                  <label class="small-label">URL Alert / Overlay Saweria:</label>
+                  <span class="overlay-status-badge inactive" id="saweriaStatusBadge">⚪ Belum disetel</span>
+                </div>
+                <input type="text" id="saweriaOverlayUrl" class="form-input"
+                  placeholder="https://saweria.co/overlays/alert?streamKey=..." oninput="onDonationUrlInputChanged()"
+                  onchange="saveDonationIntegrationUrls(false)">
+              </div>
+
+              <!-- Custom URL Input & Status (Trakteer / Sociabuzz) -->
+              <div class="input-form-group mt-2">
+                <div class="overlay-status-row">
+                  <label class="small-label">URL Alert Lainnya (Trakteer / Sociabuzz):</label>
+                  <span class="overlay-status-badge inactive" id="customStatusBadge">⚪ Belum disetel</span>
+                </div>
+                <input type="text" id="customOverlayUrl" class="form-input"
+                  placeholder="https://trakteer.id/... atau https://sociabuzz.com/..."
+                  oninput="onDonationUrlInputChanged()" onchange="saveDonationIntegrationUrls(false)">
+              </div>
+
+              <div class="actions-buttons-grid mt-2">
+                <button class="btn-action primary" onclick="saveDonationIntegrationUrls(true)">
+                  💾 Simpan & Aktifkan Overlay
+                </button>
+                <button class="btn-action secondary" onclick="reloadAllDonationOverlays()">
+                  🔄 Muat Ulang Overlay
+                </button>
+              </div>
+            </div>
+
+            <!-- Simulation / Test Buttons -->
+            <div class="section-box compact-box">
+              <h4 class="section-title">⚡ Uji Coba Tampilan (Test Simulation)</h4>
+              <div class="actions-buttons-grid">
+                <button class="btn-action primary" onclick="triggerTestDonationAlert('saweria')">
+                  🎁 Test Donasi Saweria
+                </button>
+                <button class="btn-action primary" onclick="triggerTestDonationAlert('tako')">
+                  🐙 Test Donasi Tako
+                </button>
+                <button class="btn-action" onclick="triggerTestMedserAlert()">
+                  🎬 Test Medser Alert
+                </button>
+                <button class="btn-action secondary" onclick="triggerTestLeaderboardUpdate()">
+                  🏆 Test Update Leaderboard
                 </button>
               </div>
             </div>
           </div>
 
-          <div class="section-box">
-            <div class="section-header-split">
-              <h4 class="section-title">Stream Aktif</h4>
-              <button class="btn-chip danger" onclick="disconnectAllStreams()">Putuskan Semua</button>
-            </div>
-            <div id="connectedStreamsContainer" class="stream-chips-container">
-              <span class="no-streams-notice">Tidak ada stream aktif. Hubungkan live chat melalui form di atas.</span>
-            </div>
-          </div>
+          <!-- Tab 4: Kontrol, Sistem & Filter -->
+          <div id="tabControls" class="tab-pane">
 
-        </div>
+            <div class="section-box compact-box">
+              <h4 class="section-title">Aksi Cepat & Sistem</h4>
+              <button class="btn-action primary full-width mb-2" onclick="refreshChat()">
+                🔄 Segarkan Koneksi Chat (Refresh Now)
+              </button>
 
-        <!-- Tab 2: Tampilan & Warna (Live Customization!) -->
-        <div id="tabDisplay" class="tab-pane">
-          
-          <!-- Background Customization (Default Transparan) -->
-          <div class="section-box">
-            <h4 class="section-title">Latar Belakang Window (Background)</h4>
-            <p class="section-desc">Otomatis default transparan. Anda juga bisa memilih warna khusus dengan Color Picker.</p>
-            
-            <div class="theme-buttons-grid">
-              <button class="theme-btn active" id="themeBtnClear" onclick="applyPresetBackground('transparent')">
-                <span class="theme-preview clear-preview"></span>
-                <span>Transparan (Default)</span>
-              </button>
-              <button class="theme-btn" id="themeBtnGlass" onclick="applyPresetBackground('glass')">
-                <span class="theme-preview glass-preview"></span>
-                <span>Kaca Gelap (35%)</span>
-              </button>
-              <button class="theme-btn" id="themeBtnSolid" onclick="applyPresetBackground('solid')">
-                <span class="theme-preview solid-preview"></span>
-                <span>Hitam Pekat</span>
-              </button>
-              <button class="theme-btn" id="themeBtnGreen" onclick="applyPresetBackground('green')">
-                <span class="theme-preview green-preview"></span>
-                <span>OBS Green Screen</span>
-              </button>
+              <div class="setting-toggle-row">
+                <div>
+                  <strong>Auto-Scroll Chat ke Bawah</strong>
+                  <p class="setting-hint">Otomatis gulir ke pesan terbaru saat ada chat baru masuk</p>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="chkAutoScroll" checked onchange="toggleAutoScroll(this.checked)">
+                  <span class="slider"></span>
+                </label>
+              </div>
+
+              <div class="setting-toggle-row">
+                <div>
+                  <strong>Kunci Posisi (Lock Orientation)</strong>
+                  <p class="setting-hint">Kunci agar jendela tidak dapat digeser</p>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="chkLockPosition" onchange="toggleLockPosition(this.checked)">
+                  <span class="slider"></span>
+                </label>
+              </div>
+
+              <div class="setting-toggle-row">
+                <div>
+                  <strong>Selalu di Depan (Always on Top)</strong>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="chkAlwaysOnTop" checked onchange="toggleAlwaysOnTop(this.checked)">
+                  <span class="slider"></span>
+                </label>
+              </div>
+
+              <div class="setting-toggle-row">
+                <div>
+                  <strong>Efek Suara Beep</strong>
+                </div>
+                <button class="btn-action" id="btnSoundToggle" onclick="toggleSound()">
+                  <span id="soundIcon">🔊</span> Sound: ON
+                </button>
+              </div>
             </div>
 
-            <!-- Custom Color Picker Background -->
-            <div class="custom-color-row">
-              <div class="color-picker-group">
-                <label for="bgColorPicker">Pilih Warna Background:</label>
-                <div class="picker-wrapper">
-                  <input type="color" id="bgColorPicker" value="#000000" onchange="onCustomBgColorChange(this.value)">
-                  <span id="bgColorHex" class="color-hex-text">#000000</span>
+            <!-- Filter & Search -->
+            <div class="section-box compact-box">
+              <div class="section-header-split">
+                <h4 class="section-title">Filter Platform</h4>
+                <div class="quick-filter-btns">
+                  <button class="btn-micro" onclick="setFilter('all')">Semua</button>
+                  <button class="btn-micro" onclick="setFilter('yt')">YT</button>
+                  <button class="btn-micro" onclick="setFilter('tw')">TW</button>
+                  <button class="btn-micro" onclick="setFilter('tt')">TT</button>
+                  <button class="btn-micro" onclick="setFilter('dc')">DC</button>
                 </div>
               </div>
-
-              <div class="slider-group">
-                <div class="slider-header">
-                  <span>Opasitas Background:</span>
-                  <strong id="bgOpacityVal">0%</strong>
-                </div>
-                <input type="range" id="bgOpacitySlider" class="form-range" min="0" max="100" value="0" 
-                       oninput="onBgOpacityChange(this.value)">
+              <div class="filters-grid">
+                <label class="filter-card">
+                  <input type="checkbox" id="chkFilterYt" checked onchange="applyFilters()">
+                  <span class="badge-yt">[YT]</span>
+                  <span>YouTube</span>
+                </label>
+                <label class="filter-card">
+                  <input type="checkbox" id="chkFilterTw" checked onchange="applyFilters()">
+                  <span class="badge-tw">[TW]</span>
+                  <span>Twitch</span>
+                </label>
+                <label class="filter-card">
+                  <input type="checkbox" id="chkFilterTt" checked onchange="applyFilters()">
+                  <span class="badge-tt">[TT]</span>
+                  <span>TikTok</span>
+                </label>
+                <label class="filter-card">
+                  <input type="checkbox" id="chkFilterDc" checked onchange="applyFilters()">
+                  <span class="badge-dc">[DC]</span>
+                  <span>Discord</span>
+                </label>
               </div>
-            </div>
-          </div>
 
-          <!-- Bubble Chat Customization -->
-          <div class="section-box">
-            <h4 class="section-title">Warna & Desain Bubble Chat</h4>
-            <p class="section-desc">Sesuaikan warna latar bubble, opasitas, dan garis tepi.</p>
-            
-            <!-- Bubble Background Color & Opacity -->
-            <div class="color-picker-group">
-              <label for="bubbleBgColorPicker">Warna Latar Bubble:</label>
-              <div class="picker-wrapper">
-                <input type="color" id="bubbleBgColorPicker" value="#0e121a" onchange="onBubbleBgColorChange(this.value)">
-                <span id="bubbleBgHex" class="color-hex-text">#0e121a</span>
-              </div>
-            </div>
-
-            <div class="slider-group">
-              <div class="slider-header">
-                <span>Opasitas Bubble:</span>
-                <strong id="bubbleOpacityVal">78%</strong>
-              </div>
-              <input type="range" id="bubbleOpacitySlider" class="form-range" min="0" max="100" value="78" 
-                     oninput="onBubbleOpacityChange(this.value)">
-            </div>
-
-            <!-- Bubble Border -->
-            <div class="setting-toggle-row">
-              <div>
-                <strong>Border / Garis Tepi Bubble</strong>
-                <p class="setting-hint">Tampilkan outline halus pada tiap bubble</p>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="chkBubbleBorder" checked onchange="onBubbleBorderToggle(this.checked)">
-                <span class="slider"></span>
-              </label>
-            </div>
-
-            <div class="color-picker-group" id="bubbleBorderPickerGroup">
-              <label for="bubbleBorderColorPicker">Warna Border:</label>
-              <div class="picker-wrapper">
-                <input type="color" id="bubbleBorderColorPicker" value="#ffffff" onchange="onBubbleBorderColorChange(this.value)">
-                <span id="bubbleBorderHex" class="color-hex-text">#ffffff</span>
+              <div class="mt-2">
+                <input type="text" id="chatSearchInput" class="form-input" placeholder="Cari kata kunci dalam chat..."
+                  oninput="handleSearch()">
               </div>
             </div>
 
-            <!-- Bubble Shape / Border Radius -->
-            <div class="slider-group">
-              <div class="slider-header">
-                <span>Lengkungan Sudut Bubble:</span>
-                <strong id="bubbleRadiusVal">12px</strong>
-              </div>
-              <input type="range" id="bubbleRadiusSlider" class="form-range" min="0" max="24" value="12" 
-                     oninput="onBubbleRadiusChange(this.value)">
-            </div>
-
-            <!-- Bubble Padding -->
-            <div class="slider-group">
-              <div class="slider-header">
-                <span>Ketebalan / Padding Bubble:</span>
-                <strong id="bubblePaddingVal">Sedang</strong>
-              </div>
-              <input type="range" id="bubblePaddingSlider" class="form-range" min="2" max="10" value="5" 
-                     oninput="onBubblePaddingChange(this.value)">
-            </div>
-
-            <!-- Bubble Gap -->
-            <div class="slider-group">
-              <div class="slider-header">
-                <span>Jarak Antar Bubble (Gap):</span>
-                <strong id="bubbleGapVal">5px</strong>
-              </div>
-              <input type="range" id="bubbleGapSlider" class="form-range" min="2" max="14" value="5" 
-                     oninput="onBubbleGapChange(this.value)">
-            </div>
-
-          </div>
-
-          <!-- Typography & Text Customization -->
-          <div class="section-box">
-            <h4 class="section-title">Font & Ukuran Teks</h4>
-
-            <!-- Font Family -->
-            <div class="font-select-group">
-              <label for="fontSelect">Jenis Font:</label>
-              <select id="fontSelect" class="form-select" onchange="onFontFamilyChange(this.value)">
-                <option value="'Inter', sans-serif">Inter (Modern & Bersih - Rekomendasi)</option>
-                <option value="'Poppins', sans-serif">Poppins (Rounded Modern)</option>
-                <option value="'Outfit', sans-serif">Outfit (Futuristic Streamer)</option>
-                <option value="'Roboto', sans-serif">Roboto (Neutral Sans)</option>
-                <option value="'Share Tech Mono', monospace">Share Tech Mono (Cyber Monospace)</option>
-                <option value="'VT323', monospace">VT323 (Retro 8-bit Pixel)</option>
-                <option value="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">System UI (Segoe UI)</option>
-              </select>
-            </div>
-
-            <!-- Font Size Slider -->
-            <div class="slider-group">
-              <div class="slider-header">
-                <span>Ukuran Teks Chat:</span>
-                <strong id="fontSizeVal">14px</strong>
-              </div>
-              <input type="range" id="fontSizeSlider" class="form-range" min="11" max="24" value="14" 
-                     oninput="onFontSizeChange(this.value)">
-            </div>
-
-            <!-- Chat Text Color -->
-            <div class="color-picker-group">
-              <label for="chatTextColorPicker">Warna Teks Chat:</label>
-              <div class="picker-wrapper">
-                <input type="color" id="chatTextColorPicker" value="#ffffff" onchange="onChatTextColorChange(this.value)">
-                <span id="chatTextHex" class="color-hex-text">#ffffff</span>
+            <!-- Manajemen Chat -->
+            <div class="section-box compact-box">
+              <h4 class="section-title">Manajemen Pesan</h4>
+              <div class="actions-buttons-grid">
+                <button class="btn-action danger" onclick="clearAllChat()">
+                  🗑 Bersihkan Chat
+                </button>
+                <button class="btn-action" onclick="exportChatLog()">
+                  💾 Ekspor Log (.txt)
+                </button>
               </div>
             </div>
-
-            <!-- Effects -->
-            <div class="setting-toggle-row">
-              <div>
-                <strong>Efek Garis Layar CRT (Scanlines)</strong>
-                <p class="setting-hint">Nuansa retro TV scanlines</p>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="chkScanlines" onchange="toggleScanlines()">
-                <span class="slider"></span>
-              </label>
-            </div>
-
-            <div class="setting-toggle-row">
-              <div>
-                <strong>High-Contrast Mode</strong>
-                <p class="setting-hint">Teks tebal kontras maksimal</p>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="chkContrast" onchange="toggleContrast()">
-                <span class="slider"></span>
-              </label>
-            </div>
-
-            <button class="btn-action secondary full-width mt-2" onclick="resetDefaultAppearance()">
-              🔄 Reset Pengaturan Tampilan ke Default
-            </button>
 
           </div>
 
         </div>
+      </div> <!-- end .settings-content-wrap -->
 
-        <!-- Tab 3: Controls & Feed -->
-        <div id="tabControls" class="tab-pane">
-          <div class="section-box">
-            <h4 class="section-title">Posisi & Overlay Window</h4>
-            
-            <div class="setting-toggle-row">
-              <div>
-                <strong>Kunci Posisi (Lock Orientation)</strong>
-                <p class="setting-hint">Kunci posisi agar jendela tidak dapat digeser atau berpindah</p>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="chkLockPosition" onchange="toggleLockPosition(this.checked)">
-                <span class="slider"></span>
-              </label>
-            </div>
+      <!-- Settings Info Popup / Modal (Figma Template: Blue base, Pink middle, Yellow notes) -->
+      <div id="settingsInfoModal" class="settings-info-overlay hidden" onclick="onSettingsInfoOverlayClick(event)">
+        <div class="info-modal-card" role="dialog" aria-labelledby="info-dialog-title">
+          <div class="info-rect-blue" aria-hidden="true"></div>
+          <div class="info-rect-pink" aria-hidden="true"></div>
+          <div class="info-rect-yellow" aria-hidden="true"></div>
 
-            <div class="setting-toggle-row">
-              <div>
-                <strong>Selalu di Paling Depan (Always on Top)</strong>
-                <p class="setting-hint">Tetap terlihat di depan layar saat pindah screen / ALT+TAB</p>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="chkAlwaysOnTop" checked onchange="toggleAlwaysOnTop(this.checked)">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
+          <h3 class="info-title" id="info-dialog-title">settings</h3>
+          <span class="info-tag-text" aria-hidden="true">info ?</span>
 
-          <div class="section-box">
-            <h4 class="section-title">Opsi Feed & Suara</h4>
-            
-            <div class="setting-toggle-row">
-              <div>
-                <strong>Simulasi Test Feed</strong>
-                <p class="setting-hint">Generate pesan acak YouTube & Twitch untuk uji coba</p>
-              </div>
-              <button class="btn-action" id="btnTestToggle" onclick="toggleTestMode()">
-                ⚡ Test Mode: <strong id="testModeStatus">OFF</strong>
-              </button>
-            </div>
+          <button class="info-close-btn" type="button" onclick="toggleSettingsInfoModal(false)"
+            aria-label="Informasi settings">
+            <svg class="info-close-svg" viewBox="0 0 24 24" width="8" height="8" fill="none" stroke="#000000"
+              stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
 
-            <div class="setting-toggle-row">
-              <div>
-                <strong>Efek Suara Retro (Audio Beep)</strong>
-                <p class="setting-hint">Bunyi klik dan notifikasi pesan masuk</p>
-              </div>
-              <button class="btn-action" id="btnSoundToggle" onclick="toggleSound()">
-                <span id="soundIcon">🔊</span> Sound: ON
-              </button>
-            </div>
-
-            <div class="setting-toggle-row">
-              <div>
-                <strong>Auto-Scroll Pesan</strong>
-                <p class="setting-hint">Otomatis menggulir ke pesan chat terbaru</p>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="chkAutoScroll" checked onchange="toggleAutoScroll(this.checked)">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-
-          <div class="section-box">
-            <h4 class="section-title">Manajemen Data Chat</h4>
-            <div class="actions-buttons-grid">
-              <button class="btn-action danger" onclick="clearAllChat()">
-                🗑 Bersihkan Semua Chat
-              </button>
-              <button class="btn-action" onclick="exportChatLog()">
-                💾 Ekspor Chat Log (.txt)
-              </button>
-              <button class="btn-action" onclick="togglePinnedDrawer(); closeSettingsModal();">
-                📌 Kelola Pesan Tersemat
-              </button>
-            </div>
+          <div class="info-texts">
+            <p class="kamu-bisa-save">
+              Kamu bisa save account Live kamu dengan memberikan username atau nama channel untuk disimpan dan akan
+              otomatis menampilkan chat begitu anda Live!
+            </p>
+            <p class="kamu-juga-bisa">
+              Kamu juga bisa memakai cara menautkan secara manual dengan mengisi kolom link / username untuk mendapatkan
+              akses yang sama
+            </p>
+            <p class="p-collab">
+              Kamu juga bisa menambahkan lebih dari satu live chat, jika kamu ingin collab stream dan menyatukan semua
+              chat dari partner stream kamu
+            </p>
           </div>
         </div>
-
-        <!-- Tab 4: Filter & Search -->
-        <div id="tabFilter" class="tab-pane">
-          <div class="section-box">
-            <div class="section-header-split">
-              <h4 class="section-title">Filter Platform</h4>
-              <div class="quick-filter-btns">
-                <button class="btn-micro" onclick="setFilter('all')">Semua</button>
-                <button class="btn-micro" onclick="setFilter('yt')">YT</button>
-                <button class="btn-micro" onclick="setFilter('tw')">TW</button>
-                <button class="btn-micro" onclick="setFilter('tt')">TT</button>
-              </div>
-            </div>
-            <div class="filters-grid">
-              <label class="filter-card">
-                <input type="checkbox" id="chkFilterYt" checked onchange="applyFilters()">
-                <span class="badge-yt">[YT]</span>
-                <span>Tampilkan YouTube Chat</span>
-              </label>
-              <label class="filter-card">
-                <input type="checkbox" id="chkFilterTw" checked onchange="applyFilters()">
-                <span class="badge-tw">[TW]</span>
-                <span>Tampilkan Twitch Chat</span>
-              </label>
-              <label class="filter-card">
-                <input type="checkbox" id="chkFilterTt" checked onchange="applyFilters()">
-                <span class="badge-tt">[TT]</span>
-                <span>Tampilkan TikTok Chat</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="section-box">
-            <h4 class="section-title">Cari Kata Kunci dalam Chat</h4>
-            <input type="text" id="chatSearchInput" class="form-input" 
-                   placeholder="Ketik kata kunci untuk menyaring pesan..." oninput="handleSearch()">
-          </div>
-        </div>
-
-        <!-- Tab 5: Info & Status -->
-        <div id="tabAbout" class="tab-pane">
-          <div class="section-box">
-            <h4 class="section-title">Status Sistem</h4>
-            <div class="status-summary-grid">
-              <div class="status-card">
-                <span class="card-label">Koneksi</span>
-                <span class="card-val" id="statusMessage">Online</span>
-              </div>
-              <div class="status-card">
-                <span class="card-label">Total Pesan</span>
-                <span class="card-val" id="statusMsgCount">0</span>
-              </div>
-              <div class="status-card">
-                <span class="card-label">Kecepatan</span>
-                <span class="card-val" id="statusRate">0.0 msg/s</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="section-box">
-            <h4 class="section-title">Panduan Ringkas Format URL</h4>
-            <ul class="info-list">
-              <li><strong>Twitch:</strong> Ketik nama channel langsung atau buka tab Stream di atas.</li>
-              <li><strong>YouTube:</strong> Buka video live YouTube ➜ Salin URL video (`watch?v=...`) ➜ Hubungkan.</li>
-              <li><strong>TikTok:</strong> Masukkan `@username` yang sedang siaran langsung.</li>
-            </ul>
-          </div>
-
-          <div class="section-box about-footer">
-            <strong>LiveChat Pro Overlay v2.0</strong>
-            <p>Multi-Platform Live Stream Chat Aggregator dengan Live Side-Panel Customizer.</p>
-          </div>
-        </div>
-
       </div>
-
-      <!-- Hidden fallbacks for legacy references in JS -->
       <span id="win95Clock" style="display:none;"></span>
       <span id="taskbarClock" style="display:none;"></span>
       <span id="menuTestCheck" style="display:none;"></span>
@@ -633,8 +754,13 @@
       <span id="menuContrastCheck" style="display:none;"></span>
       <span id="menuCompactCheck" style="display:none;"></span>
       <span id="menuAutoScrollCheck" style="display:none;"></span>
+      <span id="twitchStatusPill" style="display:none;"></span>
+      <span id="ytStatusPill" style="display:none;"></span>
+      <span id="tiktokStatusPill" style="display:none;"></span>
 
     </aside>
+
+  </div>
 
   <!-- Modal Dialog: Login / Simpan Akun Streamer -->
   <div id="accountLoginModal" class="modal-backdrop hidden">
@@ -645,14 +771,20 @@
       </div>
       <div class="modal-body">
         <p class="login-instruction" id="loginModalDesc">
-          Masukkan informasi akun streaming Anda agar aplikasi dapat mengenali dan otomatis menghubungkan chat saat live.
+          Masukkan informasi akun streaming Anda agar aplikasi dapat mengenali dan otomatis menghubungkan chat saat
+          live.
         </p>
-        
+
         <div class="login-field-group">
           <label class="login-field-label" id="loginFieldLabel">Username / Channel:</label>
-          <input type="text" id="loginModalInput" class="form-input" 
-                 placeholder="contoh: username" 
-                 onkeypress="if(event.key==='Enter') saveAccountFromModal()">
+          <input type="text" id="loginModalInput" class="form-input" placeholder="contoh: username"
+            onkeypress="if(event.key==='Enter') saveAccountFromModal()">
+        </div>
+
+        <div class="login-field-group hidden" id="discordExtraFields">
+          <label class="login-field-label">Discord Channel ID:</label>
+          <input type="text" id="loginModalChannelInput" class="form-input" placeholder="contoh: 119827364528192837"
+            onkeypress="if(event.key==='Enter') saveAccountFromModal()">
         </div>
 
         <div class="login-tips" id="loginModalTip">
@@ -666,6 +798,65 @@
     </div>
   </div>
 
+  <!-- Modal Dialog: Collab Stream Manager & Add More Stream -->
+  <div id="collabModal" class="modal-backdrop hidden">
+    <div class="modal-window login-modal-box">
+      <div class="modal-header">
+        <span class="modal-title">🤝 Collab Stream (Chat Partner)</span>
+        <button class="bar-btn" onclick="closeCollabModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="login-instruction">
+          Pilih platform dan masukkan username / channel partner Anda untuk membaca obrolan penonton mereka secara
+          bersamaan.
+        </p>
+
+        <div class="login-field-group">
+          <label class="login-field-label">Pilih Platform Partner:</label>
+          <select id="collabPlatformSelect" class="form-select" onchange="onCollabPlatformChange(this.value)">
+            <option value="youtube">▶ YouTube Live</option>
+            <option value="twitch">👾 Twitch Channel</option>
+            <option value="tiktok">🎵 TikTok LIVE</option>
+            <option value="discord">🎮 Discord Channel</option>
+          </select>
+        </div>
+
+        <div class="login-field-group">
+          <label class="login-field-label">Nama / Panggilan Partner (Opsional):</label>
+          <input type="text" id="collabPartnerNameInput" class="form-input"
+            placeholder="contoh: Budi / Kobo / Partner 1">
+        </div>
+
+        <div class="login-field-group">
+          <label class="login-field-label" id="collabIdentifierLabel">Handle YouTube / Channel ID / URL Live:</label>
+          <input type="text" id="collabIdentifierInput" class="form-input"
+            placeholder="contoh: @PartnerHandle atau link live"
+            onkeypress="if(event.key==='Enter') addCollabStreamFromModal()">
+        </div>
+
+        <div class="login-tips" id="collabModalTip">
+          💡 Tips: Chat dari partner akan otomatis ditandai badge <strong>[🤝 Nama Partner]</strong> di layar chat.
+        </div>
+
+        <!-- Active Collab Streams inside modal -->
+        <div class="collab-modal-active-section mt-2">
+          <div class="section-header-split mb-1">
+            <span class="small-label">Partner Collab yang Sedang Aktif:</span>
+            <button class="btn-micro" onclick="clearAllCollabStreams()">Putuskan Semua</button>
+          </div>
+          <div id="collabActiveListInModal" class="collab-streams-list">
+            <span class="no-streams-notice">Belum ada partner yang terhubung.</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-action" onclick="closeCollabModal()">Selesai / Tutup</button>
+        <button class="btn-action primary" onclick="addCollabStreamFromModal()">➕ Sambungkan Stream Partner</button>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
+
 </html>

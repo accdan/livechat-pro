@@ -51,6 +51,7 @@ const state = {
     yt: true,
     tw: true,
     tt: true,
+    dc: true,
     searchQuery: ''
   },
   stats: {
@@ -67,8 +68,20 @@ const state = {
     twitch: '',
     youtube: '',
     tiktok: '',
+    discordToken: '',
+    discordChannel: '',
     autoConnect: true
-  }
+  },
+  donations: {
+    alertEnabled: true,
+    medserEnabled: true,
+    leaderboardEnabled: true,
+    saweriaUrl: '',
+    takoUrl: '',
+    customUrl: ''
+  },
+  leaderboard: [],
+  collabPartners: []
 };
 
 // --- Web Audio API Retro Sound Effects ---
@@ -129,6 +142,16 @@ function playRetroSound(type) {
       gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
       osc.start(now);
       osc.stop(now + 0.15);
+    } else if (type === 'donation') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(523.25, now); // C5
+      osc.frequency.setValueAtTime(659.25, now + 0.09); // E5
+      osc.frequency.setValueAtTime(783.99, now + 0.18); // G5
+      osc.frequency.setValueAtTime(1046.50, now + 0.27); // C6
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+      osc.start(now);
+      osc.stop(now + 0.6);
     }
   } catch (e) {
     console.warn("Audio play error:", e);
@@ -150,6 +173,16 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleLockPosition(true);
   }
 
+  // Restore saved auto-scroll preference
+  try {
+    const savedAutoScroll = localStorage.getItem('livechat_autoscroll');
+    if (savedAutoScroll !== null) {
+      state.settings.autoScroll = (savedAutoScroll === 'true');
+    }
+  } catch (e) {}
+  const chkAutoScroll = document.getElementById('chkAutoScroll');
+  if (chkAutoScroll) chkAutoScroll.checked = state.settings.autoScroll;
+
   // Restore saved appearance customizations
   loadSavedAppearance();
 
@@ -165,41 +198,69 @@ document.addEventListener('DOMContentLoaded', () => {
   // Setup TikTok Live IPC event listeners
   if (electronIpc) {
     electronIpc.on('tiktok-chat', (event, data) => {
+      const stream = state.activeStreams.find(s => s.id === data.streamId || s.cleanUser === (data.username || data.uniqueId));
       addChatMessage({
         platform: 'tiktok',
         username: data.username || data.uniqueId,
-        text: data.comment
+        text: data.comment,
+        collabPartner: stream ? stream.collabPartner : null
       });
     });
 
     electronIpc.on('tiktok-gift', (event, data) => {
+      const stream = state.activeStreams.find(s => s.id === data.streamId || s.cleanUser === (data.username || data.uniqueId));
       const giftCount = data.repeatCount ? `x${data.repeatCount}` : '';
       addChatMessage({
         platform: 'tiktok',
         username: data.username || data.uniqueId,
-        text: `🎁 Mengirim Gift ${data.giftName || 'Gift'} ${giftCount}! 🎉`
+        text: `🎁 Mengirim Gift ${data.giftName || 'Gift'} ${giftCount}! 🎉`,
+        collabPartner: stream ? stream.collabPartner : null
+      });
+
+      // Trigger animated Donation Alert Popup
+      showDonationAlert({
+        platform: 'TIKTOK',
+        donor: data.username || data.uniqueId,
+        amount: `${data.giftName || 'Gift'} ${giftCount}`,
+        message: data.diamondCount ? `${data.diamondCount} 💎 Diamonds` : 'Gift TikTok Live'
       });
     });
 
     electronIpc.on('tiktok-status', (event, data) => {
+      const stream = state.activeStreams.find(s => s.id === data.streamId || s.cleanUser === data.username);
       if (data.status === 'connected') {
-        addSystemMessage(`✅ [TikTok] Berhasil terhubung ke live chat @${data.username} (Room ID: ${data.roomId})! Menunggu komentar penonton...`);
-        const stream = state.activeStreams.find(s => s.id === data.streamId);
         if (stream) {
+          stream.isStandby = false;
           stream.channelOrId = `@${data.username} (Live)`;
           updateConnectedStreamsUI();
         }
+        addSystemMessage(`✅ [TikTok] Berhasil terhubung ke live chat @${data.username}! Menunggu penonton...`);
       } else if (data.status === 'error') {
         let errDesc = data.error || 'Gagal terhubung';
-        if (errDesc.includes('LIVE has ended') || errDesc.includes('offline') || errDesc.includes('not found') || errDesc.includes('404')) {
-          addSystemMessage(`⏳ [TikTok] @${data.username} saat ini belum LIVE atau siaran telah berakhir. Pastikan akun sedang siaran langsung publik.`);
+        if (stream) {
+          stream.isStandby = true;
+          stream.channelOrId = `@${data.username} (Standby)`;
+          updateConnectedStreamsUI();
+        }
+        if (errDesc.includes('belum LIVE') || errDesc.includes('offline') || errDesc.includes('ended')) {
+          addSystemMessage(`⏳ [TikTok] @${data.username} standby: otomatis terhubung saat live dimulai.`);
         } else {
-          addSystemMessage(`⚠️ [TikTok] Info koneksi @${data.username}: ${errDesc}`);
+          addSystemMessage(`⚠️ [TikTok] Status @${data.username}: ${errDesc}`);
         }
       } else if (data.status === 'disconnected') {
-        addSystemMessage(`ℹ️ [TikTok] Koneksi live chat @${data.username} terputus.`);
+        if (stream) {
+          stream.isStandby = true;
+          stream.channelOrId = `@${data.username} (Standby)`;
+          updateConnectedStreamsUI();
+        }
+        addSystemMessage(`ℹ️ [TikTok] Koneksi live chat @${data.username} standby.`);
       } else if (data.status === 'streamEnd') {
-        addSystemMessage(`🔴 [TikTok] Siaran langsung @${data.username} telah berakhir.`);
+        if (stream) {
+          stream.isStandby = true;
+          stream.channelOrId = `@${data.username} (Standby)`;
+          updateConnectedStreamsUI();
+        }
+        addSystemMessage(`🔴 [TikTok] Siaran @${data.username} berakhir / standby.`);
       }
     });
   }
@@ -257,18 +318,34 @@ function initDraggableWindow() {
   }
 }
 
+let isUserScrolledUp = false;
+let isResizingSettings = false;
+
 function initGlobalListeners() {
   // Chat feed scroll detection for "New Messages" float button
   const chatFeed = document.getElementById('chatFeed');
   if (chatFeed) {
     chatFeed.addEventListener('scroll', () => {
-      const isAtBottom = chatFeed.scrollHeight - chatFeed.scrollTop - chatFeed.clientHeight < 40;
+      if (isResizingSettings) return; // Prevent window resize / settings panel expansion from breaking auto-scroll
+      const distanceToBottom = chatFeed.scrollHeight - chatFeed.scrollTop - chatFeed.clientHeight;
+      const isAtBottom = distanceToBottom < 45;
       const btnScroll = document.getElementById('btnScrollBottom');
-      if (btnScroll && isAtBottom) {
-        btnScroll.classList.add('hidden');
+      if (isAtBottom) {
+        isUserScrolledUp = false;
+        if (btnScroll) btnScroll.classList.add('hidden');
+      } else {
+        isUserScrolledUp = true;
+        if (btnScroll) btnScroll.classList.remove('hidden');
       }
-    });
+    }, { passive: true });
   }
+
+  // Keep chat pinned to bottom on window resize if user was not scrolled up
+  window.addEventListener('resize', () => {
+    if (state.settings.autoScroll && !isUserScrolledUp) {
+      scrollToBottom(true);
+    }
+  });
 
   // Close modal with ESC
   document.addEventListener('keydown', (e) => {
@@ -321,8 +398,18 @@ function parseStreamUrl(url) {
     return { platform: 'youtube', channelOrId: videoId, originalUrl: url };
   }
 
-  // Fallback: If user just types Twitch username or YT ID
+  // Discord matching: discord.com/channels/.../CHANNEL_ID
+  const dcRegex = /(?:https?:\/\/)?(?:www\.)?discord\.com\/channels\/[0-9]+\/([0-9]{15,22})/i;
+  const dcMatch = url.match(dcRegex);
+  if (dcMatch) {
+    return { platform: 'discord', channelOrId: dcMatch[1], originalUrl: url };
+  }
+
+  // Fallback: If user just types Twitch username or YT ID or Discord Channel ID (17-20 digits)
   if (!url.includes('.')) {
+    if (/^[0-9]{16,21}$/.test(url)) {
+      return { platform: 'discord', channelOrId: url, originalUrl: url };
+    }
     if (url.length === 11) {
       return { platform: 'youtube', channelOrId: url, originalUrl: `https://www.youtube.com/watch?v=${url}` };
     }
@@ -349,50 +436,62 @@ function connectFromModal() {
 function quickAddStream(platform) {
   let promptText = platform === 'youtube' 
     ? 'Enter YouTube Live Stream URL or Video ID:' 
-    : 'Enter Twitch Channel URL or Username:';
+    : (platform === 'discord' ? 'Masukkan Discord Channel ID:' : 'Enter Twitch Channel URL or Username:');
   const url = prompt(promptText);
   if (url) {
     connectStreamUrl(url, platform);
   }
 }
 
-function connectStreamUrl(rawUrl, forcePlatform = 'auto') {
+function connectStreamUrl(rawUrl, forcePlatform = 'auto', collabPartner = null) {
   const parsed = parseStreamUrl(rawUrl);
   if (!parsed && forcePlatform === 'auto') {
     playRetroSound('error');
-    alert('❌ Invalid Stream URL!\nPlease enter a valid YouTube video URL or Twitch channel link.');
+    alert('❌ Invalid Stream URL!\nMasukkan URL/ID YouTube, Twitch, TikTok, atau Discord Channel.');
     return;
   }
 
-  const platform = (forcePlatform !== 'auto') ? forcePlatform : parsed.platform;
+  const platform = (forcePlatform !== 'auto') ? forcePlatform : (parsed ? parsed.platform : 'youtube');
   const channelOrId = parsed ? parsed.channelOrId : rawUrl.trim();
 
-  // Prevent duplicate connections
-  if (state.activeStreams.some(s => s.platform === platform && s.channelOrId === channelOrId)) {
-    alert(`Stream [${platform.toUpperCase()}] ${channelOrId} is already connected!`);
+  // Prevent duplicate connections for identical channel/ID and role
+  if (state.activeStreams.some(s => s.platform === platform && s.channelOrId === channelOrId && s.collabPartner === collabPartner)) {
+    alert(`Stream [${platform.toUpperCase()}] ${channelOrId} sudah terhubung!`);
     return;
   }
 
   playRetroSound('connect');
 
   if (platform === 'twitch') {
-    connectTwitchIrc(channelOrId, rawUrl);
+    connectTwitchIrc(channelOrId, rawUrl, collabPartner);
   } else if (platform === 'youtube') {
-    connectYouTubeStream(channelOrId, rawUrl);
+    connectYouTubeStream(channelOrId, rawUrl, collabPartner);
+  } else if (platform === 'tiktok') {
+    connectTikTokStream(channelOrId, false, collabPartner);
+  } else if (platform === 'discord') {
+    if (state.savedAccounts.discordToken) {
+      connectDiscordGateway(state.savedAccounts.discordToken, channelOrId, false, collabPartner);
+    } else {
+      openLoginModal('discord');
+      const chanInput = document.getElementById('loginModalChannelInput');
+      if (chanInput) chanInput.value = channelOrId;
+      addSystemMessage('🔑 Masukkan Discord Bot Token Anda untuk menghubungkan channel ini.');
+    }
   }
 
   updateConnectedStreamsUI();
 }
 
 // --- Twitch IRC WebSocket Integration ---
-function connectTwitchIrc(channelName, originalUrl) {
+function connectTwitchIrc(channelName, originalUrl, collabPartner = null) {
   const ws = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
   const streamObj = {
-    id: `tw-${Date.now()}`,
+    id: `tw-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     platform: 'twitch',
     channelOrId: channelName,
     url: originalUrl || `https://twitch.tv/${channelName}`,
-    ws: ws
+    ws: ws,
+    collabPartner: collabPartner || null
   };
 
   ws.onopen = () => {
@@ -405,7 +504,8 @@ function connectTwitchIrc(channelName, originalUrl) {
 
     state.activeStreams.push(streamObj);
     updateConnectedStreamsUI();
-    addSystemMessage(`Connected to Twitch IRC: #${channelName}`);
+    const collabTag = collabPartner ? ` [🤝 Collab: ${collabPartner}]` : '';
+    addSystemMessage(`Connected to Twitch IRC: #${channelName}${collabTag}`);
   };
 
   ws.onmessage = (event) => {
@@ -420,7 +520,7 @@ function connectTwitchIrc(channelName, originalUrl) {
     const lines = rawData.split('\r\n');
     lines.forEach(line => {
       if (line.includes('PRIVMSG')) {
-        parseTwitchIrcLine(line, channelName);
+        parseTwitchIrcLine(line, channelName, streamObj);
       }
     });
   };
@@ -436,7 +536,7 @@ function connectTwitchIrc(channelName, originalUrl) {
   };
 }
 
-function parseTwitchIrcLine(line, channelName) {
+function parseTwitchIrcLine(line, channelName, streamObj = null) {
   try {
     // Format: @badge-info=... :username!username@username.tmi.twitch.tv PRIVMSG #channel :Message text
     let tags = {};
@@ -471,7 +571,8 @@ function parseTwitchIrcLine(line, channelName) {
         username: username,
         text: messageText,
         userColor: tags['color'] || '#532d8c',
-        twitchEmotes: tags['emotes'] || ''
+        twitchEmotes: tags['emotes'] || '',
+        collabPartner: streamObj ? streamObj.collabPartner : null
       });
     }
   } catch (e) {
@@ -480,19 +581,21 @@ function parseTwitchIrcLine(line, channelName) {
 }
 
 // --- YouTube Live Stream Handler (Real-Time InnerTube API Fetcher) ---
-function connectYouTubeStream(videoId, originalUrl) {
+function connectYouTubeStream(videoId, originalUrl, collabPartner = null) {
   const streamObj = {
-    id: `yt-${Date.now()}`,
+    id: `yt-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     platform: 'youtube',
     channelOrId: videoId,
     url: `https://www.youtube.com/live_chat?is_popout=1&v=${videoId}`,
     ws: null,
-    pollInterval: null
+    pollInterval: null,
+    collabPartner: collabPartner || null
   };
 
   state.activeStreams.push(streamObj);
   updateConnectedStreamsUI();
-  addSystemMessage(`Connected YouTube Live Chat stream: www.youtube.com/live_chat?is_popout=1&v=${videoId}`);
+  const collabTag = collabPartner ? ` [🤝 Collab: ${collabPartner}]` : '';
+  addSystemMessage(`Connected YouTube Live Chat stream: www.youtube.com/live_chat?is_popout=1&v=${videoId}${collabTag}`);
 
   startYouTubeRealtimeFetcher(videoId, streamObj);
 }
@@ -561,6 +664,7 @@ async function startYouTubeRealtimeFetcher(videoId, streamObj) {
       const item = act.addChatItemAction ? act.addChatItemAction.item : null;
       if (!item) return;
 
+      // 1. Standard text message
       const renderer = item.liveChatTextMessageRenderer;
       if (renderer) {
         const username = renderer.authorName ? (renderer.authorName.simpleText || 'YouTube User') : 'YouTube User';
@@ -585,9 +689,71 @@ async function startYouTubeRealtimeFetcher(videoId, streamObj) {
           addChatMessage({
             platform: 'youtube',
             username: username,
-            text: text
+            text: text,
+            collabPartner: streamObj.collabPartner
           });
         }
+      }
+
+      // 2. Super Chat (Paid message)
+      const paidMsg = item.liveChatPaidMessageRenderer;
+      if (paidMsg) {
+        const username = paidMsg.authorName ? (paidMsg.authorName.simpleText || 'Donatur') : 'Donatur';
+        const amount = paidMsg.purchaseAmountText ? paidMsg.purchaseAmountText.simpleText : 'Super Chat';
+        let text = '';
+        if (paidMsg.message && paidMsg.message.runs) {
+          text = paidMsg.message.runs.map(r => r.text || '').join('');
+        }
+        addChatMessage({
+          platform: 'youtube',
+          username: username,
+          text: `💸 [SUPER CHAT ${amount}] ${text}`,
+          collabPartner: streamObj.collabPartner
+        });
+        showDonationAlert({
+          platform: 'YOUTUBE',
+          donor: username,
+          amount: amount,
+          message: text || 'Super Chat'
+        });
+      }
+
+      // 3. Super Sticker (Paid sticker)
+      const paidSticker = item.liveChatPaidStickerRenderer;
+      if (paidSticker) {
+        const username = paidSticker.authorName ? (paidSticker.authorName.simpleText || 'Donatur') : 'Donatur';
+        const amount = paidSticker.purchaseAmountText ? paidSticker.purchaseAmountText.simpleText : 'Super Sticker';
+        const stickerUrl = (paidSticker.sticker && paidSticker.sticker.thumbnails && paidSticker.sticker.thumbnails[0])
+          ? paidSticker.sticker.thumbnails[0].url : '';
+        const stickerAlt = (paidSticker.sticker && paidSticker.sticker.accessibility && paidSticker.sticker.accessibility.accessibilityData)
+          ? paidSticker.sticker.accessibility.accessibilityData.label : 'Sticker';
+        const stickerTag = stickerUrl ? `[STICKER:${encodeURIComponent(stickerUrl)}:${encodeURIComponent(stickerAlt)}]` : '⭐';
+        
+        addChatMessage({
+          platform: 'youtube',
+          username: username,
+          text: `🌟 [SUPER STICKER ${amount}] ${stickerTag}`,
+          collabPartner: streamObj.collabPartner
+        });
+        showDonationAlert({
+          platform: 'YOUTUBE',
+          donor: username,
+          amount: amount,
+          message: 'Mengirim Super Sticker!'
+        });
+      }
+
+      // 4. Membership greeting / badge
+      const memberItem = item.liveChatMembershipItemRenderer;
+      if (memberItem) {
+        const username = memberItem.authorName ? (memberItem.authorName.simpleText || 'Member') : 'Member';
+        const subtext = memberItem.headerSubtext ? (memberItem.headerSubtext.runs ? memberItem.headerSubtext.runs.map(r => r.text).join('') : '') : 'Baru bergabung membership!';
+        addChatMessage({
+          platform: 'youtube',
+          username: username,
+          text: `🎖️ [MEMBERSHIP] ${subtext}`,
+          collabPartner: streamObj.collabPartner
+        });
       }
     });
   }
@@ -635,6 +801,7 @@ function disconnectStream(id) {
     if (stream.ws) stream.ws.close();
     if (stream.pollInterval) clearInterval(stream.pollInterval);
     if (stream.standbyCheckInterval) clearInterval(stream.standbyCheckInterval);
+    if (stream.heartbeatInterval) clearInterval(stream.heartbeatInterval);
     if (stream.platform === 'tiktok' && electronIpc) {
       electronIpc.send('tiktok-disconnect', { streamId: stream.id });
     }
@@ -650,6 +817,7 @@ function disconnectAllStreams() {
     if (s.ws) s.ws.close();
     if (s.pollInterval) clearInterval(s.pollInterval);
     if (s.standbyCheckInterval) clearInterval(s.standbyCheckInterval);
+    if (s.heartbeatInterval) clearInterval(s.heartbeatInterval);
     if (s.platform === 'tiktok' && electronIpc) {
       electronIpc.send('tiktok-disconnect', { streamId: s.id });
     }
@@ -679,8 +847,8 @@ function updateConnectedStreamsUI() {
 
   if (container) {
     container.innerHTML = state.activeStreams.map(s => {
-      const pClass = s.platform === 'youtube' ? 'yt' : (s.platform === 'tiktok' ? 'tt' : 'tw');
-      const pLabel = s.platform === 'youtube' ? 'YT' : (s.platform === 'tiktok' ? 'TT' : 'TW');
+      const pClass = s.platform === 'youtube' ? 'yt' : (s.platform === 'tiktok' ? 'tt' : (s.platform === 'discord' ? 'dc' : 'tw'));
+      const pLabel = s.platform === 'youtube' ? 'YT' : (s.platform === 'tiktok' ? 'TT' : (s.platform === 'discord' ? 'DC' : 'TW'));
       return `
         <div class="stream-chip ${pClass}">
           <span class="chip-status-dot"></span>
@@ -736,19 +904,57 @@ function updateConnectedStreamsUI() {
       ttPill.className = 'platform-status-pill';
     }
   }
+
+  // Update Discord Status Pill
+  const dcPill = document.getElementById('dcStatusPill') || document.getElementById('discordStatusPill');
+  const dcStream = state.activeStreams.find(s => s.platform === 'discord');
+  if (dcPill) {
+    if (dcStream) {
+      dcPill.textContent = `● Terhubung: ${dcStream.channelOrId}`;
+      dcPill.className = 'platform-status-pill connected';
+    } else {
+      dcPill.textContent = 'Siap Connect';
+      dcPill.className = 'platform-status-pill';
+    }
+  }
+
+  // Synchronize Collab stream counters & lists
+  renderCollabUI();
 }
 
 // --- Multi-Platform Chat Aggregator Engine ---
-function addChatMessage({ platform, username, text, userColor, twitchEmotes }) {
+const clientRecentMsgs = new Map();
+
+function isClientDuplicate(platform, user, text) {
+  if (!user || !text) return false;
+  const key = `${platform}:${String(user).trim()}:${String(text).trim()}`;
+  const now = Date.now();
+  if (clientRecentMsgs.has(key)) {
+    const prev = clientRecentMsgs.get(key);
+    if (now - prev < 6000) return true;
+  }
+  clientRecentMsgs.set(key, now);
+  if (clientRecentMsgs.size > 200) {
+    for (const [k, t] of clientRecentMsgs.entries()) {
+      if (now - t > 10000) clientRecentMsgs.delete(k);
+    }
+  }
+  return false;
+}
+
+function addChatMessage({ platform, username, text, userColor, twitchEmotes, collabPartner }) {
+  if (isClientDuplicate(platform, username, text)) return;
+
   const msgObj = {
     id: `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    platform: platform, // 'youtube', 'twitch', or 'tiktok'
+    platform: platform, // 'youtube', 'twitch', 'tiktok', or 'discord'
     username: username,
     text: text,
     timestamp: getFormattedTime(),
     isPinned: false,
     userColor: userColor,
-    twitchEmotes: twitchEmotes || ''
+    twitchEmotes: twitchEmotes || '',
+    collabPartner: collabPartner || null
   };
 
   state.messages.push(msgObj);
@@ -771,6 +977,7 @@ function addChatMessage({ platform, username, text, userColor, twitchEmotes }) {
 
 function addSystemMessage(text) {
   const chatFeed = document.getElementById('chatFeed');
+  if (!chatFeed) return;
   const div = document.createElement('div');
   div.className = 'chat-item system-msg';
   div.style.fontStyle = 'italic';
@@ -874,9 +1081,10 @@ function formatChatMessageWithEmojis(rawText, msgObj = {}) {
     });
   }
 
-  // 2. Process text chunks to escape HTML and apply emojis
-  const parts = text.split(/(\[YTEMOJI:[^:]+:[^\]]+\])/g);
+  // 2. Process text chunks to escape HTML and apply emojis (YouTube, TikTok, and Stickers)
+  const parts = text.split(/(\[YTEMOJI:[^:]+:[^\]]+\]|\[TTEMOJI:[^:]+:[^\]]+\]|\[STICKER:[^:]+:[^\]]+\])/g);
   return parts.map(part => {
+    // YouTube Custom Channel Emotes
     if (part.startsWith('[YTEMOJI:')) {
       const match = part.match(/\[YTEMOJI:([^:]+):([^\]]+)\]/);
       if (match) {
@@ -884,6 +1092,34 @@ function formatChatMessageWithEmojis(rawText, msgObj = {}) {
           const imgUrl = decodeURIComponent(match[1]);
           const altText = decodeURIComponent(match[2]);
           return `<img class="chat-emoji yt-emoji" src="${escapeHtml(imgUrl)}" alt="${escapeHtml(altText)}" title="${escapeHtml(altText)}" loading="lazy">`;
+        } catch (e) {
+          return '';
+        }
+      }
+    }
+
+    // TikTok Emotes
+    if (part.startsWith('[TTEMOJI:')) {
+      const match = part.match(/\[TTEMOJI:([^:]+):([^\]]+)\]/);
+      if (match) {
+        try {
+          const imgUrl = decodeURIComponent(match[1]);
+          const altText = decodeURIComponent(match[2]);
+          return `<img class="chat-emoji tt-emoji" src="${escapeHtml(imgUrl)}" alt="${escapeHtml(altText)}" title="${escapeHtml(altText)}" loading="lazy">`;
+        } catch (e) {
+          return '';
+        }
+      }
+    }
+
+    // Super Stickers (YouTube)
+    if (part.startsWith('[STICKER:')) {
+      const match = part.match(/\[STICKER:([^:]+):([^\]]+)\]/);
+      if (match) {
+        try {
+          const imgUrl = decodeURIComponent(match[1]);
+          const altText = decodeURIComponent(match[2]);
+          return `<div class="chat-sticker-wrap"><img class="chat-sticker" src="${escapeHtml(imgUrl)}" alt="${escapeHtml(altText)}" title="${escapeHtml(altText)}" loading="lazy"></div>`;
         } catch (e) {
           return '';
         }
@@ -914,6 +1150,13 @@ function formatChatMessageWithEmojis(rawText, msgObj = {}) {
       return w;
     }).join('');
 
+    // Replace Discord Custom Emojis (<:name:id> or <a:name:id>)
+    escaped = escaped.replace(/&lt;(a)?:([a-zA-Z0-9_]+):([0-9]+)&gt;/g, (match, animated, name, id) => {
+      const ext = animated ? 'gif' : 'webp';
+      const url = `https://cdn.discordapp.com/emojis/${id}.${ext}?size=48&quality=lossless`;
+      return `<img class="chat-emoji dc-emoji" src="${url}" alt=":${name}:" title=":${name}:" loading="lazy">`;
+    });
+
     // Replace standard Unicode Emojis with high-resolution Twemoji SVG
     escaped = escaped.replace(/\p{Extended_Pictographic}/gu, (m) => {
       const cp = emojiToCodePoints(m);
@@ -930,6 +1173,7 @@ function renderSingleChatMessage(msgObj) {
   if (msgObj.platform === 'youtube' && !state.filters.yt) return;
   if (msgObj.platform === 'twitch' && !state.filters.tw) return;
   if (msgObj.platform === 'tiktok' && !state.filters.tt) return;
+  if (msgObj.platform === 'discord' && !state.filters.dc) return;
 
   // Check search filter query
   if (state.filters.searchQuery) {
@@ -946,9 +1190,10 @@ function renderSingleChatMessage(msgObj) {
 
   const isYt = msgObj.platform === 'youtube';
   const isTt = msgObj.platform === 'tiktok';
-  const badgeClass = isYt ? 'yt' : (isTt ? 'tt' : 'tw');
-  const badgeText = isYt ? 'YT' : (isTt ? 'TT' : 'TW');
-  const userClass = isYt ? 'yt-user' : (isTt ? 'tt-user' : 'tw-user');
+  const isDc = msgObj.platform === 'discord';
+  const badgeClass = isYt ? 'yt' : (isTt ? 'tt' : (isDc ? 'dc' : 'tw'));
+  const badgeText = isYt ? 'YT' : (isTt ? 'TT' : (isDc ? 'DC' : 'TW'));
+  const userClass = isYt ? 'yt-user' : (isTt ? 'tt-user' : (isDc ? 'dc-user' : 'tw-user'));
 
   let formattedText = formatChatMessageWithEmojis(msgObj.text, msgObj);
 
@@ -958,9 +1203,14 @@ function renderSingleChatMessage(msgObj) {
     formattedText = formattedText.replace(re, '<mark>$1</mark>');
   }
 
+  const collabBadgeHtml = msgObj.collabPartner 
+    ? `<span class="chat-collab-badge" title="Collab Partner: ${escapeHtml(msgObj.collabPartner)}">🤝 ${escapeHtml(msgObj.collabPartner)}</span>` 
+    : '';
+
   div.innerHTML = `
     <span class="chat-timestamp">[${msgObj.timestamp}]</span>
     <span class="chat-badge ${badgeClass}">[${badgeText}]</span>
+    ${collabBadgeHtml}
     <span class="chat-username ${userClass}">${escapeHtml(msgObj.username)}:</span>
     <span class="chat-text">${formattedText}</span>
     <div class="chat-actions">
@@ -981,7 +1231,20 @@ function reRenderAllMessages() {
 
 function scrollToBottom(force = false) {
   const chatFeed = document.getElementById('chatFeed');
+  if (!chatFeed) return;
+  if (force) {
+    isUserScrolledUp = false;
+    const btnScroll = document.getElementById('btnScrollBottom');
+    if (btnScroll) btnScroll.classList.add('hidden');
+  } else if (isUserScrolledUp) {
+    return;
+  }
   chatFeed.scrollTop = chatFeed.scrollHeight;
+  requestAnimationFrame(() => {
+    if (chatFeed && (!isUserScrolledUp || force)) {
+      chatFeed.scrollTop = chatFeed.scrollHeight;
+    }
+  });
 }
 
 // --- Simulation Feed Generator (Test Mode) ---
@@ -1145,9 +1408,11 @@ function applyFilters() {
   const ytChk = document.getElementById('chkFilterYt');
   const twChk = document.getElementById('chkFilterTw');
   const ttChk = document.getElementById('chkFilterTt');
+  const dcChk = document.getElementById('chkFilterDc');
   state.filters.yt = ytChk ? ytChk.checked : true;
   state.filters.tw = twChk ? twChk.checked : true;
   state.filters.tt = ttChk ? ttChk.checked : true;
+  state.filters.dc = dcChk ? dcChk.checked : true;
   reRenderAllMessages();
 }
 
@@ -1214,6 +1479,7 @@ function toggleCompactMode() {
 }
 
 function toggleAutoScroll(val) {
+  playRetroSound('click');
   if (typeof val === 'boolean') {
     state.settings.autoScroll = val;
   } else {
@@ -1221,6 +1487,18 @@ function toggleAutoScroll(val) {
   }
   const chk = document.getElementById('chkAutoScroll');
   if (chk) chk.checked = state.settings.autoScroll;
+
+  try {
+    localStorage.setItem('livechat_autoscroll', state.settings.autoScroll);
+  } catch (e) {}
+
+  if (state.settings.autoScroll) {
+    isUserScrolledUp = false;
+    scrollToBottom(true);
+    addSystemMessage('Auto-scroll chat diaktifkan.');
+  } else {
+    addSystemMessage('Auto-scroll chat dinonaktifkan.');
+  }
 }
 
 // --- Appearance Live Customization Engine ---
@@ -1558,36 +1836,53 @@ function connectTikTokFromCard() {
   connectTikTokStream(username);
 }
 
-function connectTikTokStream(username) {
-  playRetroSound('connect');
+function connectTikTokStream(username, silent = false, collabPartner = null) {
   const cleanUser = String(username).replace(/^@/, '').trim();
   if (!cleanUser) {
-    alert('Masukkan username TikTok yang valid!');
+    if (!silent) alert('Masukkan username TikTok yang valid!');
     return;
   }
 
-  const streamId = `tt-${Date.now()}`;
+  // Avoid duplicate connections for same user & collab status
+  const existing = state.activeStreams.find(s => s.platform === 'tiktok' && s.cleanUser === cleanUser && s.collabPartner === collabPartner);
+  if (existing) {
+    if (!silent) addSystemMessage(`Stream TikTok @${cleanUser} sudah terhubung.`);
+    return;
+  }
+
+  if (!silent) playRetroSound('connect');
+  const streamId = `tt-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   const streamObj = {
     id: streamId,
     platform: 'tiktok',
-    channelOrId: `@${cleanUser}`,
-    url: `https://www.tiktok.com/@${cleanUser}/live`
+    cleanUser: cleanUser,
+    channelOrId: `@${cleanUser} (Memeriksa...)`,
+    url: `https://www.tiktok.com/@${cleanUser}/live`,
+    isStandby: false,
+    collabPartner: collabPartner || null
   };
-
-  // Avoid duplicate connections
-  if (state.activeStreams.some(s => s.channelOrId.toLowerCase() === `@${cleanUser}`.toLowerCase())) {
-    addSystemMessage(`Stream TikTok @${cleanUser} sudah terhubung.`);
-    return;
-  }
 
   state.activeStreams.push(streamObj);
   updateConnectedStreamsUI();
-  addSystemMessage(`🎵 Menghubungkan ke TikTok Live @${cleanUser} via Webcast Push Service...`);
+  addSystemMessage(`🎵 [TikTok] Memeriksa live status @${cleanUser}...`);
 
   if (electronIpc) {
     electronIpc.send('tiktok-connect', { streamId, username: cleanUser });
+
+    // Periodic standby auto-reconnect loop every 25 seconds
+    if (streamObj.standbyCheckInterval) clearInterval(streamObj.standbyCheckInterval);
+    streamObj.standbyCheckInterval = setInterval(() => {
+      if (!state.activeStreams.some(s => s.id === streamObj.id)) {
+        clearInterval(streamObj.standbyCheckInterval);
+        return;
+      }
+      if (streamObj.isStandby) {
+        console.log(`[TikTok Standby] Re-checking @${cleanUser}...`);
+        electronIpc.send('tiktok-connect', { streamId: streamObj.id, username: cleanUser });
+      }
+    }, 25000);
   } else {
-    addSystemMessage(`⚠️ Fitur live chat TikTok aktif pada aplikasi desktop/portable.`);
+    addSystemMessage(`⚠️ Fitur live chat TikTok aktif pada aplikasi desktop.`);
   }
 }
 
@@ -1604,47 +1899,78 @@ function setFilter(type) {
   const ytChk = document.getElementById('chkFilterYt');
   const twChk = document.getElementById('chkFilterTw');
   const ttChk = document.getElementById('chkFilterTt');
+  const dcChk = document.getElementById('chkFilterDc');
   if (type === 'yt') {
     if (ytChk) ytChk.checked = true;
     if (twChk) twChk.checked = false;
     if (ttChk) ttChk.checked = false;
+    if (dcChk) dcChk.checked = false;
   } else if (type === 'tw') {
     if (ytChk) ytChk.checked = false;
     if (twChk) twChk.checked = true;
     if (ttChk) ttChk.checked = false;
+    if (dcChk) dcChk.checked = false;
   } else if (type === 'tt') {
     if (ytChk) ytChk.checked = false;
     if (twChk) twChk.checked = false;
     if (ttChk) ttChk.checked = true;
+    if (dcChk) dcChk.checked = false;
+  } else if (type === 'dc') {
+    if (ytChk) ytChk.checked = false;
+    if (twChk) twChk.checked = false;
+    if (ttChk) ttChk.checked = false;
+    if (dcChk) dcChk.checked = true;
   } else {
     if (ytChk) ytChk.checked = true;
     if (twChk) twChk.checked = true;
     if (ttChk) ttChk.checked = true;
+    if (dcChk) dcChk.checked = true;
   }
   applyFilters();
 }
 
-// --- Right-Side Settings Panel Controls ---
+// --- In-Window Settings Panel Controls (No Window Widening, Preserves Lock Orientation) ---
 function toggleSettingsModal() {
   playRetroSound('click');
   const panel = document.getElementById('settingsPanel') || document.getElementById('settingsModal');
   if (!panel) return;
   const isOpening = panel.classList.contains('hidden');
   
+  isResizingSettings = true;
+
   if (isOpening) {
     panel.classList.remove('hidden');
   } else {
     panel.classList.add('hidden');
   }
 
-  // Notify Electron to expand/collapse window
-  if (window.require) {
+  // Keep chat feed pinned to bottom during and after panel transition
+  if (state.settings.autoScroll) {
+    isUserScrolledUp = false;
+    scrollToBottom(true);
+    setTimeout(() => {
+      scrollToBottom(true);
+    }, 150);
+    setTimeout(() => {
+      scrollToBottom(true);
+      isResizingSettings = false;
+    }, 350);
+  } else {
+    setTimeout(() => {
+      isResizingSettings = false;
+    }, 350);
+  }
+
+  // Notify Electron to expand/collapse window to the right
+  if (electronIpc) {
+    try {
+      electronIpc.send('toggle-settings-panel', isOpening);
+    } catch (e) {}
+  } else if (typeof window !== 'undefined' && window.require) {
     try {
       const { ipcRenderer } = window.require('electron');
       ipcRenderer.send('toggle-settings-panel', isOpening);
-    } catch (e) {
-      console.warn("Electron IPC notice:", e);
-    }
+    } catch (e) {}
   }
 }
 
@@ -1652,15 +1978,53 @@ function closeSettingsModal() {
   playRetroSound('click');
   const panel = document.getElementById('settingsPanel') || document.getElementById('settingsModal');
   if (panel && !panel.classList.contains('hidden')) {
+    isResizingSettings = true;
     panel.classList.add('hidden');
-    if (window.require) {
+
+    if (state.settings.autoScroll) {
+      isUserScrolledUp = false;
+      scrollToBottom(true);
+      setTimeout(() => {
+        scrollToBottom(true);
+      }, 150);
+      setTimeout(() => {
+        scrollToBottom(true);
+        isResizingSettings = false;
+      }, 350);
+    } else {
+      setTimeout(() => {
+        isResizingSettings = false;
+      }, 350);
+    }
+
+    if (electronIpc) {
+      try {
+        electronIpc.send('toggle-settings-panel', false);
+      } catch (e) {}
+    } else if (typeof window !== 'undefined' && window.require) {
       try {
         const { ipcRenderer } = window.require('electron');
         ipcRenderer.send('toggle-settings-panel', false);
-      } catch (e) {
-        console.warn("Electron IPC notice:", e);
-      }
+      } catch (e) {}
     }
+  }
+}
+
+function toggleSettingsInfoModal(forceOpen) {
+  playRetroSound('click');
+  const modal = document.getElementById('settingsInfoModal');
+  if (!modal) return;
+  if (typeof forceOpen === 'boolean') {
+    if (forceOpen) modal.classList.remove('hidden');
+    else modal.classList.add('hidden');
+  } else {
+    modal.classList.toggle('hidden');
+  }
+}
+
+function onSettingsInfoOverlayClick(event) {
+  if (event.target && event.target.id === 'settingsInfoModal') {
+    toggleSettingsInfoModal(false);
   }
 }
 
@@ -1688,6 +2052,7 @@ function toggleLockPosition(val) {
 
   const lockBtn = document.getElementById('barLockBtn');
   const lockIcon = document.getElementById('lockIcon');
+  const lockShackle = document.getElementById('lockShackle');
   const topBar = document.getElementById('topBar');
   const chk = document.getElementById('chkLockPosition');
 
@@ -1698,17 +2063,23 @@ function toggleLockPosition(val) {
       lockBtn.classList.add('locked');
       lockBtn.title = "Posisi Terkunci (Klik untuk membuka kunci)";
     }
+    if (lockShackle) {
+      lockShackle.setAttribute('d', 'M7 11V7a5 5 0 0 1 10 0v4');
+    }
     if (lockIcon) lockIcon.textContent = '🔒';
     if (topBar) topBar.classList.add('locked');
-    addSystemMessage('🔒 Posisi overlay dikunci (tidak dapat dipindahkan).');
+    addSystemMessage('🔒 Posisi overlay dikunci.');
   } else {
     if (lockBtn) {
       lockBtn.classList.remove('locked');
       lockBtn.title = "Kunci Posisi (Lock Orientation)";
     }
+    if (lockShackle) {
+      lockShackle.setAttribute('d', 'M7 11V7a5 5 0 0 1 9.9-1');
+    }
     if (lockIcon) lockIcon.textContent = '🔓';
     if (topBar) topBar.classList.remove('locked');
-    addSystemMessage('🔓 Posisi overlay dibuka (dapat digeser bebas).');
+    addSystemMessage('🔓 Posisi overlay dibuka.');
   }
 
   try {
@@ -1716,7 +2087,11 @@ function toggleLockPosition(val) {
   } catch (e) {}
 
   // Send IPC to Electron
-  if (window.require) {
+  if (electronIpc) {
+    try {
+      electronIpc.send('set-window-locked', state.settings.isLocked);
+    } catch (e) {}
+  } else if (typeof window !== 'undefined' && window.require) {
     try {
       const { ipcRenderer } = window.require('electron');
       ipcRenderer.send('set-window-locked', state.settings.isLocked);
@@ -1817,7 +2192,10 @@ function getFormattedTime() {
 }
 
 function updateStatsDisplay() {
-  document.getElementById('statusMsgCount').textContent = `Total: ${state.stats.totalCount} msgs`;
+  const el = document.getElementById('statusMsgCount');
+  if (el) el.textContent = `Total: ${state.stats.totalCount} msgs`;
+  const barMsg = document.getElementById('barMsgCount');
+  if (barMsg) barMsg.textContent = `${state.stats.totalCount} msgs`;
 }
 
 function updateMsgRate() {
@@ -1825,7 +2203,8 @@ function updateMsgRate() {
   // Filter messages in last 5 seconds
   state.stats.recentMsgTimestamps = state.stats.recentMsgTimestamps.filter(t => now - t <= 5000);
   const rate = (state.stats.recentMsgTimestamps.length / 5).toFixed(1);
-  document.getElementById('statusRate').textContent = `Rate: ${rate} msg/s`;
+  const el = document.getElementById('statusRate');
+  if (el) el.textContent = `Rate: ${rate} msg/s`;
 }
 
 function escapeHtml(str) {
@@ -1842,25 +2221,85 @@ function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// --- Streamer Account Login & Auto-Connect Engine ---
-function loadSavedAccounts() {
+// --- Streamer Account Login & Persistent Config Engine ---
+async function loadSavedAccounts() {
+  // 1. Try reading from permanent disk config via Electron IPC
+  if (electronIpc) {
+    try {
+      const diskConfig = await electronIpc.invoke('load-config');
+      if (diskConfig) {
+        if (diskConfig.savedAccounts) state.savedAccounts = { ...state.savedAccounts, ...diskConfig.savedAccounts };
+        if (diskConfig.settings) state.settings = { ...state.settings, ...diskConfig.settings };
+        if (diskConfig.appearance) state.appearance = { ...state.appearance, ...diskConfig.appearance };
+        if (diskConfig.donations) state.donations = { ...state.donations, ...diskConfig.donations };
+        if (diskConfig.leaderboard) state.leaderboard = diskConfig.leaderboard;
+        if (diskConfig.collabPartners) state.collabPartners = diskConfig.collabPartners;
+        updateSavedAccountsUI();
+        updateDonationsUI();
+        applyAppearanceToDom();
+        renderLeaderboard();
+        renderCollabUI();
+        return;
+      }
+    } catch (e) {
+      console.warn("Permanent disk config load notice:", e);
+    }
+  }
+
+  // 2. Fallback to localStorage
   try {
     const raw = localStorage.getItem('livechat_saved_accounts');
     if (raw) {
       const data = JSON.parse(raw);
       state.savedAccounts = { ...state.savedAccounts, ...data };
     }
+    const rawDonations = localStorage.getItem('livechat_donations');
+    if (rawDonations) {
+      state.donations = { ...state.donations, ...JSON.parse(rawDonations) };
+    }
+    const rawLb = localStorage.getItem('livechat_leaderboard');
+    if (rawLb) {
+      state.leaderboard = JSON.parse(rawLb);
+    }
+    const rawCollab = localStorage.getItem('livechat_collab_partners');
+    if (rawCollab) {
+      state.collabPartners = JSON.parse(rawCollab);
+    }
   } catch (e) {
     console.warn("Could not load saved accounts:", e);
   }
   updateSavedAccountsUI();
+  updateDonationsUI();
+  renderLeaderboard();
+  renderCollabUI();
 }
 
 function saveSavedAccountsToStorage() {
+  // 1. Save to localStorage
   try {
     localStorage.setItem('livechat_saved_accounts', JSON.stringify(state.savedAccounts));
+    localStorage.setItem('livechat_donations', JSON.stringify(state.donations));
+    localStorage.setItem('livechat_leaderboard', JSON.stringify(state.leaderboard));
+    localStorage.setItem('livechat_collab_partners', JSON.stringify(state.collabPartners));
   } catch (e) {
     console.warn("Could not save accounts to storage:", e);
+  }
+
+  // 2. Save permanently to disk via Electron IPC (never wiped on restart)
+  if (electronIpc) {
+    try {
+      const fullConfig = {
+        savedAccounts: state.savedAccounts,
+        settings: state.settings,
+        appearance: state.appearance,
+        donations: state.donations,
+        leaderboard: state.leaderboard,
+        collabPartners: state.collabPartners
+      };
+      electronIpc.invoke('save-config', fullConfig);
+    } catch (e) {
+      console.warn("Error invoking save-config:", e);
+    }
   }
 }
 
@@ -1880,15 +2319,15 @@ function updateSavedAccountsUI() {
       accTwStatus.textContent = '● Tersimpan';
       accTwStatus.className = 'acc-status-badge connected';
     }
-    if (accTwBtn) accTwBtn.textContent = 'Ubah Akun';
+    if (accTwBtn) accTwBtn.textContent = 'Ubah';
     if (accTwLogout) accTwLogout.classList.remove('hidden');
   } else {
-    if (accTwUser) accTwUser.textContent = 'Tidak ada akun tersimpan';
+    if (accTwUser) accTwUser.textContent = 'Tidak ada akun';
     if (accTwStatus) {
       accTwStatus.textContent = 'Belum Disimpan';
       accTwStatus.className = 'acc-status-badge';
     }
-    if (accTwBtn) accTwBtn.textContent = '🔑 Login / Simpan';
+    if (accTwBtn) accTwBtn.textContent = 'Simpan';
     if (accTwLogout) accTwLogout.classList.add('hidden');
   }
 
@@ -1904,15 +2343,15 @@ function updateSavedAccountsUI() {
       accYtStatus.textContent = '● Tersimpan';
       accYtStatus.className = 'acc-status-badge connected';
     }
-    if (accYtBtn) accYtBtn.textContent = 'Ubah Handle';
+    if (accYtBtn) accYtBtn.textContent = 'Ubah';
     if (accYtLogout) accYtLogout.classList.remove('hidden');
   } else {
-    if (accYtUser) accYtUser.textContent = 'Tidak ada channel tersimpan';
+    if (accYtUser) accYtUser.textContent = 'Tidak ada channel';
     if (accYtStatus) {
       accYtStatus.textContent = 'Belum Disimpan';
       accYtStatus.className = 'acc-status-badge';
     }
-    if (accYtBtn) accYtBtn.textContent = '🔑 Login / Simpan';
+    if (accYtBtn) accYtBtn.textContent = 'Simpan';
     if (accYtLogout) accYtLogout.classList.add('hidden');
   }
 
@@ -1928,16 +2367,41 @@ function updateSavedAccountsUI() {
       accTtStatus.textContent = '● Tersimpan';
       accTtStatus.className = 'acc-status-badge connected';
     }
-    if (accTtBtn) accTtBtn.textContent = 'Ubah Akun';
+    if (accTtBtn) accTtBtn.textContent = 'Ubah';
     if (accTtLogout) accTtLogout.classList.remove('hidden');
   } else {
-    if (accTtUser) accTtUser.textContent = 'Tidak ada akun tersimpan';
+    if (accTtUser) accTtUser.textContent = 'Tidak ada akun';
     if (accTtStatus) {
       accTtStatus.textContent = 'Belum Disimpan';
       accTtStatus.className = 'acc-status-badge';
     }
-    if (accTtBtn) accTtBtn.textContent = '🔑 Login / Simpan';
+    if (accTtBtn) accTtBtn.textContent = 'Simpan';
     if (accTtLogout) accTtLogout.classList.add('hidden');
+  }
+
+  // Discord
+  const dcToken = state.savedAccounts.discordToken;
+  const dcChannel = state.savedAccounts.discordChannel;
+  const accDcUser = document.getElementById('accDcUser');
+  const accDcStatus = document.getElementById('accDcStatus');
+  const accDcBtn = document.getElementById('accDcBtnText');
+  const accDcLogout = document.getElementById('accDcLogout');
+  if (dcToken && dcChannel) {
+    if (accDcUser) accDcUser.textContent = `#${dcChannel}`;
+    if (accDcStatus) {
+      accDcStatus.textContent = '● Tersimpan';
+      accDcStatus.className = 'acc-status-badge connected';
+    }
+    if (accDcBtn) accDcBtn.textContent = 'Ubah';
+    if (accDcLogout) accDcLogout.classList.remove('hidden');
+  } else {
+    if (accDcUser) accDcUser.textContent = 'Tidak ada bot/channel';
+    if (accDcStatus) {
+      accDcStatus.textContent = 'Belum Disimpan';
+      accDcStatus.className = 'acc-status-badge';
+    }
+    if (accDcBtn) accDcBtn.textContent = 'Simpan';
+    if (accDcLogout) accDcLogout.classList.add('hidden');
   }
 }
 
@@ -1952,28 +2416,46 @@ function openLoginModal(platform) {
   const label = document.getElementById('loginFieldLabel');
   const input = document.getElementById('loginModalInput');
   const tip = document.getElementById('loginModalTip');
+  const extraGroup = document.getElementById('discordExtraFields');
+  const channelInput = document.getElementById('loginModalChannelInput');
 
   if (platform === 'twitch') {
-    title.textContent = '👾 Login / Simpan Akun Twitch';
-    desc.textContent = 'Masukkan nama channel Twitch Anda. Setiap kali Anda live, chat akan otomatis tersambung tanpa perlu input ulang.';
+    if (extraGroup) extraGroup.classList.add('hidden');
+    title.textContent = '👾 Simpan Akun Twitch';
+    desc.textContent = 'Masukkan channel Twitch Anda. Chat akan otomatis tersambung saat siaran langsung aktif.';
     label.textContent = 'Username Twitch:';
-    input.placeholder = 'contoh: shroud atau username_anda';
+    input.placeholder = 'contoh: channelname';
     input.value = state.savedAccounts.twitch || '';
-    tip.textContent = '💡 Tips: Chat Twitch dihubungkan secara real-time via WebSocket IRC.';
+    tip.innerHTML = '💡 Tips: Chat Twitch dihubungkan secara real-time via IRC WebSocket.';
   } else if (platform === 'youtube') {
-    title.textContent = '▶ Login / Simpan Akun YouTube';
-    desc.textContent = 'Masukkan Handle YouTube atau Channel ID Anda (contoh: @WindahBasudara atau channel ID). Aplikasi akan memantau live stream Anda.';
-    label.textContent = 'Handle / Channel ID YouTube:';
-    input.placeholder = 'contoh: @NamaChannel atau UCxxxxxx';
+    if (extraGroup) extraGroup.classList.add('hidden');
+    title.textContent = '▶ Simpan Akun YouTube';
+    desc.textContent = 'Masukkan Handle YouTube atau Channel ID Anda (contoh: @NamaChannel). Aplikasi akan otomatis mendeteksi ketika Anda mulai streaming.';
+    label.textContent = 'Handle YouTube:';
+    input.placeholder = 'contoh: @StreamerID';
     input.value = state.savedAccounts.youtube || '';
-    tip.textContent = '💡 Tips: Format handle diawali dengan tanda @ (contoh: @StreamerID).';
+    tip.innerHTML = '💡 Tips: Gunakan format handle dengan tanda @ (contoh: @StreamerName).';
   } else if (platform === 'tiktok') {
-    title.textContent = '🎵 Login / Simpan Akun TikTok';
-    desc.textContent = 'Masukkan username TikTok Anda. Saat Anda menyalakan Live di TikTok, chat komentar akan otomatis terhubung.';
+    if (extraGroup) extraGroup.classList.add('hidden');
+    title.textContent = '🎵 Simpan Akun TikTok';
+    desc.textContent = 'Masukkan username TikTok Anda. Saat Anda menyalakan Live, chat akan otomatis tersambung.';
     label.textContent = 'Username TikTok:';
-    input.placeholder = 'contoh: streamername (tanpa spasi)';
+    input.placeholder = 'contoh: username_anda';
     input.value = state.savedAccounts.tiktok || '';
-    tip.textContent = '💡 Tips: Pastikan akun Anda dapat melakukan siaran langsung publik.';
+    tip.innerHTML = '💡 Tips: Pastikan akun Anda dapat melakukan siaran langsung publik.';
+  } else if (platform === 'discord') {
+    if (extraGroup) extraGroup.classList.remove('hidden');
+    title.textContent = '🎮 Simpan Akun Discord Bot';
+    desc.textContent = 'Hubungkan Discord Gateway untuk membaca pesan chat dari channel server Discord Anda secara real-time.';
+    label.textContent = 'Discord Bot Token:';
+    input.placeholder = 'Tempel Bot Token Anda (contoh: MTAw...)';
+    input.value = state.savedAccounts.discordToken || '';
+    if (channelInput) channelInput.value = state.savedAccounts.discordChannel || '';
+    tip.innerHTML = '💡 <strong>Panduan Cepat Discord Bot:</strong><br>' +
+                    '1. Buka <u>discord.com/developers/applications</u> & buat bot baru.<br>' +
+                    '2. Di menu <strong>Bot</strong>, klik <em>Reset Token</em> lalu salin tokennya.<br>' +
+                    '3. Aktifkan toggle <strong>MESSAGE CONTENT INTENT</strong> di halaman Bot.<br>' +
+                    '4. Invite bot ke server Anda & salin <strong>Channel ID</strong> (klik kanan channel -> Copy Channel ID).';
   }
 
   if (modal) modal.classList.remove('hidden');
@@ -1988,6 +2470,8 @@ function openLoginModal(platform) {
 function closeLoginModal() {
   playRetroSound('click');
   const modal = document.getElementById('accountLoginModal');
+  const extraGroup = document.getElementById('discordExtraFields');
+  if (extraGroup) extraGroup.classList.add('hidden');
   if (modal) modal.classList.add('hidden');
   currentLoginPlatform = null;
 }
@@ -1997,9 +2481,27 @@ function saveAccountFromModal() {
   if (!input || !currentLoginPlatform) return;
   let val = input.value.trim();
   if (!val) {
-    alert('Mohon masukkan username atau handle yang valid.');
+    alert('Mohon masukkan informasi yang valid.');
     return;
   }
+
+  if (currentLoginPlatform === 'discord') {
+    const channelInput = document.getElementById('loginModalChannelInput');
+    const channelVal = channelInput ? channelInput.value.replace(/[^0-9]/g, '').trim() : '';
+    if (!channelVal) {
+      alert('Mohon masukkan Discord Channel ID yang valid (angka numerik)!');
+      return;
+    }
+    state.savedAccounts.discordToken = val;
+    state.savedAccounts.discordChannel = channelVal;
+    saveSavedAccountsToStorage();
+    updateSavedAccountsUI();
+    closeLoginModal();
+    playRetroSound('connect');
+    connectDiscordGateway(state.savedAccounts.discordToken, state.savedAccounts.discordChannel);
+    return;
+  }
+
   // Clean up format
   if (currentLoginPlatform === 'twitch') {
     val = val.replace(/^@/, '').toLowerCase().trim();
@@ -2024,7 +2526,12 @@ function saveAccountFromModal() {
 function logoutAccount(platform) {
   playRetroSound('click');
   if (!confirm(`Hapus akun ${platform.toUpperCase()} tersimpan?`)) return;
-  state.savedAccounts[platform] = '';
+  if (platform === 'discord') {
+    state.savedAccounts.discordToken = '';
+    state.savedAccounts.discordChannel = '';
+  } else {
+    state.savedAccounts[platform] = '';
+  }
   saveSavedAccountsToStorage();
   updateSavedAccountsUI();
   addSystemMessage(`Akun ${platform.toUpperCase()} tersimpan telah dihapus.`);
@@ -2047,6 +2554,10 @@ function connectSavedAccountStream(platform, identifier) {
     }
   } else if (platform === 'tiktok') {
     connectTikTokStream(identifier);
+  } else if (platform === 'discord') {
+    if (state.savedAccounts.discordToken && state.savedAccounts.discordChannel) {
+      connectDiscordGateway(state.savedAccounts.discordToken, state.savedAccounts.discordChannel);
+    }
   }
 }
 
@@ -2062,29 +2573,283 @@ function autoConnectSavedAccountsOnStartup() {
     connectedAny = true;
   }
   if (state.savedAccounts.tiktok) {
-    connectTikTokStream(state.savedAccounts.tiktok);
+    connectTikTokStream(state.savedAccounts.tiktok, true);
+    connectedAny = true;
+  }
+  if (state.savedAccounts.discordToken && state.savedAccounts.discordChannel) {
+    connectDiscordGateway(state.savedAccounts.discordToken, state.savedAccounts.discordChannel, true);
     connectedAny = true;
   }
   if (connectedAny) {
-    addSystemMessage(`⚡ Auto-Connect: Menyambungkan ke akun streaming Anda secara otomatis.`);
+    addSystemMessage(`⚡ Auto-Connect: Memantau akun streaming tersimpan...`);
   }
 }
 
-function connectYouTubeChannelOrHandle(channelOrHandle) {
+// --- Refresh Chat Feature (🔄) ---
+function refreshChat() {
+  playRetroSound('click');
+  const btn = document.getElementById('barRefreshBtn');
+  if (btn) btn.classList.add('spinning');
+
+  addSystemMessage(`🔄 Menyegarkan koneksi stream chat...`);
+
+  // Clear deduplication cache
+  clientRecentMsgs.clear();
+
+  // Snapshot active connections
+  const currentStreams = [...state.activeStreams];
+  disconnectAllStreams();
+
+  setTimeout(() => {
+    if (currentStreams.length > 0) {
+      currentStreams.forEach(s => {
+        if (s.platform === 'twitch') {
+          connectTwitchIrc(s.channelOrId.replace(/^#/, ''), s.url, s.collabPartner);
+        } else if (s.platform === 'youtube') {
+          if (s.cleanId || s.channelOrId.startsWith('@') || s.channelOrId.startsWith('UC')) {
+            connectYouTubeChannelOrHandle(s.cleanId || s.channelOrId.split(' ')[0], s.collabPartner);
+          } else {
+            connectYouTubeStream(s.channelOrId.split(' ')[0], s.url, s.collabPartner);
+          }
+        } else if (s.platform === 'tiktok') {
+          connectTikTokStream(s.cleanUser || s.channelOrId.replace(/^@/, '').split(' ')[0], true, s.collabPartner);
+        } else if (s.platform === 'discord') {
+          connectDiscordGateway(s.token || state.savedAccounts.discordToken, s.channelId || state.savedAccounts.discordChannel, true, s.collabPartner);
+        }
+      });
+    } else {
+      autoConnectSavedAccountsOnStartup();
+    }
+
+    if (btn) {
+      setTimeout(() => btn.classList.remove('spinning'), 700);
+    }
+    playRetroSound('connect');
+    addSystemMessage(`✅ Koneksi chat berhasil diperbarui.`);
+  }, 400);
+}
+
+// --- Discord Gateway WebSocket Client Engine (v10) ---
+function connectDiscordGateway(token, targetChannelId, isAutoConnect = false, collabPartner = null) {
+  token = String(token || '').trim();
+  targetChannelId = String(targetChannelId || '').replace(/[^0-9]/g, '').trim();
+
+  if (!token || !targetChannelId) {
+    if (!isAutoConnect) alert('Bot Token dan Channel ID Discord wajib diisi!');
+    return;
+  }
+
+  // Prevent duplicate connections to the same channel with same collab status
+  const existing = state.activeStreams.find(s => s.platform === 'discord' && s.channelId === targetChannelId && s.collabPartner === collabPartner);
+  if (existing) {
+    if (!isAutoConnect) addSystemMessage(`Discord channel #${targetChannelId} sudah terhubung.`);
+    return;
+  }
+
+  const streamId = `dc-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  let ws = null;
+  let heartbeatTimer = null;
+  let lastSequence = null;
+
+  const streamObj = {
+    id: streamId,
+    platform: 'discord',
+    channelOrId: `#${targetChannelId} (Connecting...)`,
+    channelId: targetChannelId,
+    token: token,
+    url: `https://discord.com/channels/@me/${targetChannelId}`,
+    ws: null,
+    heartbeatInterval: null,
+    botUser: 'Discord Bot',
+    botId: null,
+    collabPartner: collabPartner || null
+  };
+
+  try {
+    ws = new WebSocket('wss://gateway.discord.gg/?v=10&encoding=json');
+    streamObj.ws = ws;
+  } catch (err) {
+    console.error('Failed to instantiate Discord WebSocket:', err);
+    addSystemMessage(`❌ [Discord] Gagal membuka koneksi WebSocket: ${err.message}`);
+    return;
+  }
+
+  ws.onopen = () => {
+    console.log('[Discord Gateway] WebSocket connection opened.');
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      const { op, d, s, t } = payload;
+
+      if (s !== null && s !== undefined) {
+        lastSequence = s;
+      }
+
+      // Opcode 10: HELLO -> Start Heartbeat & Send Identify
+      if (op === 10) {
+        const heartbeatInterval = d.heartbeat_interval;
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
+        
+        heartbeatTimer = setInterval(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ op: 1, d: lastSequence }));
+          }
+        }, heartbeatInterval);
+        streamObj.heartbeatInterval = heartbeatTimer;
+
+        // Send Opcode 2: IDENTIFY with GUILDS (1) + GUILD_MESSAGES (512) + MESSAGE_CONTENT (32768) = 33280
+        const identifyPayload = {
+          op: 2,
+          d: {
+            token: token,
+            intents: 33280,
+            properties: {
+              os: 'windows',
+              browser: 'livechat-pro',
+              device: 'livechat-pro'
+            }
+          }
+        };
+        ws.send(JSON.stringify(identifyPayload));
+      }
+
+      // Opcode 1: HEARTBEAT requested by server
+      else if (op === 1) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ op: 1, d: lastSequence }));
+        }
+      }
+
+      // Opcode 7: RECONNECT requested by server
+      else if (op === 7) {
+        console.log('[Discord Gateway] Server requested reconnect.');
+        ws.close();
+      }
+
+      // Opcode 9: INVALID_SESSION
+      else if (op === 9) {
+        console.warn('[Discord Gateway] Invalid session received.');
+        setTimeout(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              op: 2,
+              d: {
+                token: token,
+                intents: 33280,
+                properties: { os: 'windows', browser: 'livechat-pro', device: 'livechat-pro' }
+              }
+            }));
+          }
+        }, 1500);
+      }
+
+      // Opcode 0: DISPATCH
+      else if (op === 0) {
+        if (t === 'READY') {
+          streamObj.botUser = d.user ? d.user.username : 'Bot';
+          streamObj.botId = d.user ? d.user.id : null;
+          streamObj.channelOrId = `#${targetChannelId} (${streamObj.botUser})`;
+          updateConnectedStreamsUI();
+          playRetroSound('connect');
+          addSystemMessage(`🎮 [Discord] Terhubung sebagai ${streamObj.botUser}! Memantau channel #${targetChannelId}`);
+        } else if (t === 'MESSAGE_CREATE') {
+          // Check if message belongs to target channel
+          if (d.channel_id !== targetChannelId) return;
+
+          // Ignore messages sent by this bot itself to avoid echoes
+          if (streamObj.botId && d.author && d.author.id === streamObj.botId) return;
+
+          const authorName = (d.member && d.member.nick) || (d.author && (d.author.global_name || d.author.username)) || 'Discord User';
+          let content = d.content || '';
+
+          // Attachments (Images)
+          if (d.attachments && d.attachments.length > 0) {
+            d.attachments.forEach(att => {
+              if (att.content_type && att.content_type.startsWith('image/')) {
+                content += (content ? ' ' : '') + `[STICKER:${encodeURIComponent(att.url)}:Image]`;
+              }
+            });
+          }
+
+          // Stickers
+          if (d.sticker_items && d.sticker_items.length > 0) {
+            d.sticker_items.forEach(stk => {
+              const stkUrl = `https://media.discordapp.net/stickers/${stk.id}.png?size=160`;
+              content += (content ? ' ' : '') + `[STICKER:${encodeURIComponent(stkUrl)}:${encodeURIComponent(stk.name || 'Sticker')}]`;
+            });
+          }
+
+          if (!content) return;
+
+          addChatMessage({
+            platform: 'discord',
+            username: authorName,
+            text: content,
+            collabPartner: streamObj.collabPartner
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[Discord Gateway] Error parsing payload:', err);
+    }
+  };
+
+  ws.onerror = (e) => {
+    console.error('[Discord Gateway] WebSocket error:', e);
+  };
+
+  ws.onclose = (event) => {
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    console.log(`[Discord Gateway] Disconnected (code: ${event.code}, reason: ${event.reason})`);
+
+    // Handle authentication or intent permission failure
+    if (event.code === 4004) {
+      addSystemMessage('❌ [Discord] Gagal login: Bot Token tidak valid. Periksa token Anda di Discord Developer Portal.');
+      disconnectStream(streamId);
+      return;
+    } else if (event.code === 4014) {
+      addSystemMessage('❌ [Discord] Disallowed Intent: Aktifkan "MESSAGE CONTENT INTENT" di halaman Bot pada Discord Developer Portal!');
+      disconnectStream(streamId);
+      return;
+    }
+
+    // Auto-reconnect if still in activeStreams
+    if (state.activeStreams.some(s => s.id === streamId)) {
+      console.log('[Discord Gateway] Reconnecting in 5 seconds...');
+      setTimeout(() => {
+        if (state.activeStreams.some(s => s.id === streamId)) {
+          state.activeStreams = state.activeStreams.filter(s => s.id !== streamId);
+          connectDiscordGateway(token, targetChannelId, true);
+        }
+      }, 5000);
+    }
+  };
+
+  state.activeStreams.push(streamObj);
+  updateConnectedStreamsUI();
+}
+
+// --- YouTube Smart Auto-Detect Live Resolver ---
+function connectYouTubeChannelOrHandle(channelOrHandle, collabPartner = null) {
   const cleanId = channelOrHandle.replace(/[\/\?].*$/, '');
   const url = cleanId.startsWith('@') 
     ? `https://www.youtube.com/${cleanId}/live` 
     : `https://www.youtube.com/channel/${cleanId}/live`;
 
   const streamObj = {
-    id: `yt-channel-${Date.now()}`,
+    id: `yt-channel-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     platform: 'youtube',
-    channelOrId: cleanId,
-    url: url
+    channelOrId: `${cleanId} (Memeriksa...)`,
+    cleanId: cleanId,
+    url: url,
+    isStandby: false,
+    collabPartner: collabPartner || null
   };
 
-  // Check if already connected
-  if (state.activeStreams.some(s => s.channelOrId === cleanId)) return;
+  // Check if already connected with same collab status
+  if (state.activeStreams.some(s => s.cleanId === cleanId && s.collabPartner === collabPartner)) return;
 
   state.activeStreams.push(streamObj);
   updateConnectedStreamsUI();
@@ -2100,15 +2865,28 @@ async function resolveAndConnectYouTubeLiveChat(channelIdentifier, liveUrl, stre
     if (isChecking) return false;
     isChecking = true;
     try {
-      const res = await fetch(liveUrl);
+      const res = await fetch(liveUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+        }
+      });
       const html = await res.text();
+
+      // Check if actually live: look for videoId with live indicator or liveChatRenderer
+      let liveVideoId = null;
       const vidMatch = html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
-      if (vidMatch && vidMatch[1]) {
-        const liveVideoId = vidMatch[1];
+      const isLiveFlag = html.includes('"isLive":true') || html.includes('"isLiveContent":true') || html.includes('BADGE_STYLE_TYPE_LIVE_NOW') || html.includes('liveChatRenderer');
+
+      if (vidMatch && vidMatch[1] && isLiveFlag) {
+        liveVideoId = vidMatch[1];
+      }
+
+      if (liveVideoId) {
         if (streamObj.standbyCheckInterval) {
           clearInterval(streamObj.standbyCheckInterval);
           streamObj.standbyCheckInterval = null;
         }
+        streamObj.isStandby = false;
         streamObj.channelOrId = `${channelIdentifier} (Live: ${liveVideoId})`;
         updateConnectedStreamsUI();
         addSystemMessage(`🔴 [YouTube] Terdeteksi LIVE aktif untuk ${channelIdentifier} [ID: ${liveVideoId}]. Menghubungkan live chat...`);
@@ -2126,15 +2904,592 @@ async function resolveAndConnectYouTubeLiveChat(channelIdentifier, liveUrl, stre
   // Initial check
   const isLiveNow = await checkLiveStatus();
   if (!isLiveNow) {
-    addSystemMessage(`⏳ [YouTube] Channel ${channelIdentifier} saat ini belum LIVE. Mode Standby aktif: otomatis tersambung saat Anda mulai streaming.`);
-    // Periodic standby check every 25 seconds
+    streamObj.isStandby = true;
+    streamObj.channelOrId = `${channelIdentifier} (Standby)`;
+    updateConnectedStreamsUI();
+    addSystemMessage(`⏳ [YouTube] Channel ${channelIdentifier} standby: otomatis tersambung saat live dimulai.`);
+
+    // Periodic standby check loop every 20 seconds
     if (streamObj.standbyCheckInterval) clearInterval(streamObj.standbyCheckInterval);
     streamObj.standbyCheckInterval = setInterval(async () => {
       if (!state.activeStreams.some(s => s.id === streamObj.id)) {
         clearInterval(streamObj.standbyCheckInterval);
         return;
       }
-      await checkLiveStatus();
-    }, 25000);
+      if (streamObj.isStandby) {
+        await checkLiveStatus();
+      }
+    }, 20000);
   }
+}
+
+// ==========================================================================
+// Collab Stream (Multi-Chat Partner) Management Engine
+// ==========================================================================
+function openCollabModal() {
+  playRetroSound('click');
+  const modal = document.getElementById('collabModal');
+  if (modal) modal.classList.remove('hidden');
+  renderCollabUI();
+  const idInput = document.getElementById('collabIdentifierInput');
+  if (idInput) {
+    setTimeout(() => {
+      idInput.focus();
+      idInput.select();
+    }, 60);
+  }
+}
+
+function closeCollabModal() {
+  playRetroSound('click');
+  const modal = document.getElementById('collabModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function onCollabPlatformChange(platform) {
+  playRetroSound('click');
+  const label = document.getElementById('collabIdentifierLabel');
+  const input = document.getElementById('collabIdentifierInput');
+  const tip = document.getElementById('collabModalTip');
+
+  if (platform === 'youtube') {
+    if (label) label.textContent = 'Handle YouTube / Channel ID / URL Live:';
+    if (input) input.placeholder = 'contoh: @PartnerHandle atau link live';
+    if (tip) tip.innerHTML = '💡 Tips: Masukkan handle channel (@nama) atau URL siaran live partner Anda.';
+  } else if (platform === 'twitch') {
+    if (label) label.textContent = 'Username Twitch Partner:';
+    if (input) input.placeholder = 'contoh: partner_channel';
+    if (tip) tip.innerHTML = '💡 Tips: Masukkan username Twitch channel partner Anda (tersambung via IRC).';
+  } else if (platform === 'tiktok') {
+    if (label) label.textContent = 'Username TikTok Partner:';
+    if (input) input.placeholder = 'contoh: username_partner';
+    if (tip) tip.innerHTML = '💡 Tips: Masukkan username TikTok partner tanpa tanda @.';
+  } else if (platform === 'discord') {
+    if (label) label.textContent = 'Discord Channel ID Partner:';
+    if (input) input.placeholder = 'contoh: 123456789012345678 (17-20 digit)';
+    if (tip) tip.innerHTML = '💡 Tips: Masukkan Channel ID Discord (klik kanan channel -> Copy Channel ID). Memerlukan bot token terpasang.';
+  }
+}
+
+function addCollabStreamFromModal() {
+  const select = document.getElementById('collabPlatformSelect');
+  const nameInput = document.getElementById('collabPartnerNameInput');
+  const idInput = document.getElementById('collabIdentifierInput');
+
+  const platform = select ? select.value : 'youtube';
+  let partnerName = nameInput ? nameInput.value.trim() : '';
+  const rawIdentifier = idInput ? idInput.value.trim() : '';
+
+  if (!rawIdentifier) {
+    alert('Mohon masukkan username, handle, atau URL stream partner!');
+    return;
+  }
+
+  if (!partnerName) {
+    // Default partner name based on identifier
+    partnerName = rawIdentifier.replace(/^@/, '').split('/')[0].split('?')[0];
+    if (partnerName.length > 15) partnerName = partnerName.substring(0, 15);
+  }
+
+  playRetroSound('connect');
+
+  if (platform === 'youtube') {
+    if (rawIdentifier.includes('watch?v=') || rawIdentifier.includes('youtu.be/') || rawIdentifier.includes('/live/') || rawIdentifier.length === 11) {
+      const vMatch = rawIdentifier.match(/[?&]v=([a-zA-Z0-9_-]{11})/) || 
+                     rawIdentifier.match(/\/live\/([a-zA-Z0-9_-]{11})/) || 
+                     rawIdentifier.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+      const vidId = vMatch ? vMatch[1] : (rawIdentifier.length === 11 ? rawIdentifier : rawIdentifier);
+      connectYouTubeStream(vidId, rawIdentifier, partnerName);
+    } else {
+      connectYouTubeChannelOrHandle(rawIdentifier, partnerName);
+    }
+  } else if (platform === 'twitch') {
+    const cleanTwitch = rawIdentifier.replace(/(?:https?:\/\/)?(?:www\.)?twitch\.tv\//i, '').replace(/^#/, '').toLowerCase().trim();
+    connectTwitchIrc(cleanTwitch, null, partnerName);
+  } else if (platform === 'tiktok') {
+    const cleanTt = rawIdentifier.replace(/^@/, '').replace(/(?:https?:\/\/)?(?:www\.)?tiktok\.com\/@?/i, '').split('/')[0].trim();
+    connectTikTokStream(cleanTt, false, partnerName);
+  } else if (platform === 'discord') {
+    const cleanDc = rawIdentifier.replace(/[^0-9]/g, '').trim();
+    if (!state.savedAccounts.discordToken) {
+      alert('Untuk Discord, mohon atur Discord Bot Token Anda terlebih dahulu di tab Stream -> Discord!');
+      return;
+    }
+    connectDiscordGateway(state.savedAccounts.discordToken, cleanDc, false, partnerName);
+  }
+
+  // Save to persistent collab profiles
+  if (!state.collabPartners) state.collabPartners = [];
+  const existingIdx = state.collabPartners.findIndex(p => p.platform === platform && p.identifier === rawIdentifier);
+  if (existingIdx !== -1) {
+    state.collabPartners[existingIdx].partnerName = partnerName;
+  } else {
+    state.collabPartners.push({ platform, partnerName, identifier: rawIdentifier });
+  }
+  saveSavedAccountsToStorage();
+
+  // Clear identifier input for adding another
+  if (idInput) idInput.value = '';
+  if (nameInput) nameInput.value = '';
+
+  addSystemMessage(`🤝 Stream partner [${partnerName}] (${platform.toUpperCase()}) berhasil ditambahkan ke collab feed!`);
+  renderCollabUI();
+}
+
+function disconnectCollabStream(streamId) {
+  disconnectStream(streamId);
+  renderCollabUI();
+}
+
+function clearAllCollabStreams() {
+  const collabStreams = state.activeStreams.filter(s => Boolean(s.collabPartner));
+  if (collabStreams.length === 0) return;
+  collabStreams.forEach(s => disconnectStream(s.id));
+  renderCollabUI();
+  addSystemMessage('🤝 Semua stream partner collab telah diputuskan.');
+}
+
+function renderCollabUI() {
+  const collabStreams = state.activeStreams.filter(s => Boolean(s.collabPartner));
+  const countBadge = document.getElementById('collabCountBadge');
+  if (countBadge) {
+    countBadge.textContent = collabStreams.length;
+    countBadge.style.display = collabStreams.length > 0 ? 'inline-flex' : 'none';
+  }
+
+  const listModal = document.getElementById('collabActiveListInModal');
+  const listSettings = document.getElementById('collabStreamsList');
+
+  const renderContent = () => {
+    if (collabStreams.length === 0) {
+      return '<span class="no-streams-notice">Belum ada partner collab yang terhubung.</span>';
+    }
+    return collabStreams.map(s => {
+      const isYt = s.platform === 'youtube';
+      const isTt = s.platform === 'tiktok';
+      const isDc = s.platform === 'discord';
+      const badgeClass = isYt ? 'yt' : (isTt ? 'tt' : (isDc ? 'dc' : 'tw'));
+      const badgeText = isYt ? 'YT' : (isTt ? 'TT' : (isDc ? 'DC' : 'TW'));
+      return `
+        <div class="collab-stream-card">
+          <div class="collab-stream-card-left">
+            <span class="chat-badge ${badgeClass}">[${badgeText}]</span>
+            <div class="collab-channel-info">
+              <span class="collab-partner-tag">🤝 ${escapeHtml(s.collabPartner || 'Partner')}</span>
+              <span>${escapeHtml(s.channelOrId || '')}</span>
+            </div>
+          </div>
+          <button class="btn-micro" onclick="disconnectCollabStream('${s.id}')" title="Putuskan stream partner">✕</button>
+        </div>
+      `;
+    }).join('');
+  };
+
+  const html = renderContent();
+  if (listModal) listModal.innerHTML = html;
+  if (listSettings) listSettings.innerHTML = html;
+}
+
+// ==========================================================================
+// Donation, Medser (Media Share), & Leaderboard System (Tako & Saweria Ready)
+// ==========================================================================
+let donationAlertTimer = null;
+let medserAlertTimer = null;
+
+function showDonationAlert({ platform = 'SAWERIA', donor = 'Donatur', amount = 'Rp 10.000', message = 'Semangat streaming!' }) {
+  if (state.donations.alertEnabled === false) return;
+
+  playRetroSound('donation');
+
+  const container = document.getElementById('donationAlertContainer');
+  const badge = document.getElementById('donationPlatformBadge');
+  const donorEl = document.getElementById('donationAlertDonor');
+  const amountEl = document.getElementById('donationAlertAmount');
+  const msgEl = document.getElementById('donationAlertMessage');
+  const timeEl = document.getElementById('donationAlertTime');
+
+  if (badge) badge.textContent = `🎁 ${platform.toUpperCase()}`;
+  if (donorEl) donorEl.textContent = donor;
+  if (amountEl) amountEl.textContent = amount;
+  if (msgEl) msgEl.textContent = message || 'Terima kasih atas dukungannya!';
+  if (timeEl) timeEl.textContent = getFormattedTime();
+
+  if (container) {
+    container.classList.remove('hidden');
+    if (donationAlertTimer) clearTimeout(donationAlertTimer);
+    donationAlertTimer = setTimeout(() => {
+      container.classList.add('hidden');
+    }, 4500);
+  }
+
+  // Record to session leaderboard
+  recordDonationToLeaderboard(donor, amount);
+}
+
+function showMedserAlert({ donor = 'Donatur', title = 'Video Media Share', amount = 'Rp 20.000', duration = '01:30' }) {
+  if (state.donations.medserEnabled === false) return;
+
+  playRetroSound('donation');
+
+  const container = document.getElementById('medserAlertContainer');
+  const donorEl = document.getElementById('medserAlertDonor');
+  const titleEl = document.getElementById('medserAlertTitle');
+  const amountEl = document.getElementById('medserAlertAmount');
+  const durEl = document.getElementById('medserAlertDuration');
+
+  if (donorEl) donorEl.textContent = donor;
+  if (titleEl) titleEl.textContent = title;
+  if (amountEl) amountEl.textContent = amount;
+  if (durEl) durEl.textContent = `⏱ ${duration}`;
+
+  if (container) {
+    container.classList.remove('hidden');
+    if (medserAlertTimer) clearTimeout(medserAlertTimer);
+    medserAlertTimer = setTimeout(() => {
+      container.classList.add('hidden');
+    }, 5000);
+  }
+}
+
+function recordDonationToLeaderboard(donor, amountStr) {
+  if (!donor) return;
+  let numeric = 0;
+  const numMatch = String(amountStr).replace(/[^0-9]/g, '');
+  if (numMatch) numeric = parseInt(numMatch, 10);
+
+  const existing = state.leaderboard.find(item => item.donor.toLowerCase() === donor.toLowerCase());
+  if (existing) {
+    existing.totalNumeric = (existing.totalNumeric || 0) + numeric;
+    existing.displayTotal = existing.totalNumeric > 0 ? `Rp ${existing.totalNumeric.toLocaleString('id-ID')}` : amountStr;
+    existing.count = (existing.count || 1) + 1;
+  } else {
+    state.leaderboard.push({
+      donor: donor,
+      totalNumeric: numeric,
+      displayTotal: numeric > 0 ? `Rp ${numeric.toLocaleString('id-ID')}` : amountStr,
+      count: 1
+    });
+  }
+
+  // Sort descending by totalNumeric
+  state.leaderboard.sort((a, b) => (b.totalNumeric || 0) - (a.totalNumeric || 0));
+
+  saveSavedAccountsToStorage();
+  renderLeaderboard();
+}
+
+function renderLeaderboard() {
+  const container = document.getElementById('leaderboardContainer');
+  const badge = document.getElementById('leaderboardBadge');
+  if (badge) badge.textContent = state.leaderboard.length;
+
+  if (!container) return;
+  if (state.leaderboard.length === 0) {
+    container.innerHTML = `<div class="empty-leaderboard-msg">Belum ada donasi tercatat sesi ini.</div>`;
+    return;
+  }
+
+  const ranks = ['🥇', '🥈', '🥉'];
+  container.innerHTML = state.leaderboard.slice(0, 10).map((item, idx) => {
+    const rankLabel = ranks[idx] || `#${idx + 1}`;
+    return `
+      <div class="leaderboard-item">
+        <span class="leaderboard-rank">${rankLabel}</span>
+        <span class="leaderboard-donor">${escapeHtml(item.donor)}</span>
+        <span class="leaderboard-total">${escapeHtml(item.displayTotal)}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleLeaderboardDrawer() {
+  playRetroSound('click');
+  const drawer = document.getElementById('leaderboardDrawer');
+  if (drawer) drawer.classList.toggle('hidden');
+}
+
+function clearLeaderboard() {
+  playRetroSound('click');
+  if (!confirm('Reset leaderboard donatur sesi ini?')) return;
+  state.leaderboard = [];
+  saveSavedAccountsToStorage();
+  renderLeaderboard();
+  addSystemMessage('Leaderboard donatur telah di-reset.');
+}
+
+// Test Simulation Functions for Donasi & Medser
+function triggerTestDonationAlert(type = 'saweria') {
+  playRetroSound('click');
+  const mockDonors = ['SultanStream', 'BudiSantoso', 'GamerSejati', 'WindahFans', 'Anonim99'];
+  const mockMessages = ['Semangat live-nya bang!', 'GG gaming!', 'Donasi kopi dulu ☕', 'Keren banget overlay barunya!'];
+  const mockAmounts = ['Rp 10.000', 'Rp 25.000', 'Rp 50.000', 'Rp 100.000'];
+
+  const donor = mockDonors[Math.floor(Math.random() * mockDonors.length)];
+  const msg = mockMessages[Math.floor(Math.random() * mockMessages.length)];
+  const amount = mockAmounts[Math.floor(Math.random() * mockAmounts.length)];
+
+  showDonationAlert({
+    platform: type.toUpperCase(),
+    donor: donor,
+    amount: amount,
+    message: msg
+  });
+
+  addChatMessage({
+    platform: type === 'saweria' ? 'youtube' : 'tiktok',
+    username: donor,
+    text: `🎁 [${type.toUpperCase()} ${amount}] ${msg}`
+  });
+}
+
+function triggerTestMedserAlert() {
+  playRetroSound('click');
+  const mockVideos = ['DJ Desa Remix 2026', 'NCS - Spectre (Live)', 'Anime Opening Compilation', 'Epic Sound Effect HQ'];
+  const mockDonors = ['Budi', 'RianGamer', 'Dewi', 'Alex'];
+  const donor = mockDonors[Math.floor(Math.random() * mockDonors.length)];
+  const title = mockVideos[Math.floor(Math.random() * mockVideos.length)];
+
+  showMedserAlert({
+    donor: donor,
+    title: title,
+    amount: 'Rp 25.000',
+    duration: '01:45'
+  });
+}
+
+function triggerTestLeaderboardUpdate() {
+  playRetroSound('click');
+  triggerTestDonationAlert('saweria');
+}
+
+function toggleDonationAlertSetting(val) {
+  state.donations.alertEnabled = val;
+  saveSavedAccountsToStorage();
+}
+
+function toggleMedserAlertSetting(val) {
+  state.donations.medserEnabled = val;
+  saveSavedAccountsToStorage();
+}
+
+function toggleLeaderboardSetting(val) {
+  state.donations.leaderboardEnabled = val;
+  saveSavedAccountsToStorage();
+}
+
+function isValidHttpUrl(str) {
+  if (!str || typeof str !== 'string') return false;
+  const s = str.trim();
+  return s.startsWith('http://') || s.startsWith('https://');
+}
+
+function applyDonationOverlays() {
+  const takoFrame = document.getElementById('takoOverlayFrame');
+  const saweriaFrame = document.getElementById('saweriaOverlayFrame');
+  const customFrame = document.getElementById('customOverlayFrame');
+
+  const takoUrl = (state.donations && state.donations.takoUrl) ? state.donations.takoUrl.trim() : '';
+  const saweriaUrl = (state.donations && state.donations.saweriaUrl) ? state.donations.saweriaUrl.trim() : '';
+  const customUrl = (state.donations && state.donations.customUrl) ? state.donations.customUrl.trim() : '';
+
+  // 1. Mount / Update Tako Overlay Frame
+  if (takoFrame) {
+    if (takoUrl && isValidHttpUrl(takoUrl)) {
+      if (takoFrame.getAttribute('data-active-src') !== takoUrl) {
+        takoFrame.src = takoUrl;
+        takoFrame.setAttribute('data-active-src', takoUrl);
+      }
+      takoFrame.classList.remove('hidden');
+    } else {
+      if (takoFrame.getAttribute('data-active-src')) {
+        takoFrame.src = 'about:blank';
+        takoFrame.removeAttribute('data-active-src');
+      }
+      takoFrame.classList.add('hidden');
+    }
+  }
+
+  // 2. Mount / Update Saweria Overlay Frame
+  if (saweriaFrame) {
+    if (saweriaUrl && isValidHttpUrl(saweriaUrl)) {
+      if (saweriaFrame.getAttribute('data-active-src') !== saweriaUrl) {
+        saweriaFrame.src = saweriaUrl;
+        saweriaFrame.setAttribute('data-active-src', saweriaUrl);
+      }
+      saweriaFrame.classList.remove('hidden');
+    } else {
+      if (saweriaFrame.getAttribute('data-active-src')) {
+        saweriaFrame.src = 'about:blank';
+        saweriaFrame.removeAttribute('data-active-src');
+      }
+      saweriaFrame.classList.add('hidden');
+    }
+  }
+
+  // 3. Mount / Update Custom Overlay Frame
+  if (customFrame) {
+    if (customUrl && isValidHttpUrl(customUrl)) {
+      if (customFrame.getAttribute('data-active-src') !== customUrl) {
+        customFrame.src = customUrl;
+        customFrame.setAttribute('data-active-src', customUrl);
+      }
+      customFrame.classList.remove('hidden');
+    } else {
+      if (customFrame.getAttribute('data-active-src')) {
+        customFrame.src = 'about:blank';
+        customFrame.removeAttribute('data-active-src');
+      }
+      customFrame.classList.add('hidden');
+    }
+  }
+
+  updateDonationBadges();
+}
+
+function updateDonationBadges() {
+  const takoBadge = document.getElementById('takoStatusBadge');
+  const saweriaBadge = document.getElementById('saweriaStatusBadge');
+  const customBadge = document.getElementById('customStatusBadge');
+
+  const takoUrl = (state.donations && state.donations.takoUrl) ? state.donations.takoUrl.trim() : '';
+  const saweriaUrl = (state.donations && state.donations.saweriaUrl) ? state.donations.saweriaUrl.trim() : '';
+  const customUrl = (state.donations && state.donations.customUrl) ? state.donations.customUrl.trim() : '';
+
+  if (takoBadge) {
+    if (takoUrl && isValidHttpUrl(takoUrl)) {
+      takoBadge.className = 'overlay-status-badge active';
+      takoBadge.textContent = '🟢 Aktif (Live)';
+    } else {
+      takoBadge.className = 'overlay-status-badge inactive';
+      takoBadge.textContent = '⚪ Belum disetel';
+    }
+  }
+
+  if (saweriaBadge) {
+    if (saweriaUrl && isValidHttpUrl(saweriaUrl)) {
+      saweriaBadge.className = 'overlay-status-badge active';
+      saweriaBadge.textContent = '🟢 Aktif (Live)';
+    } else {
+      saweriaBadge.className = 'overlay-status-badge inactive';
+      saweriaBadge.textContent = '⚪ Belum disetel';
+    }
+  }
+
+  if (customBadge) {
+    if (customUrl && isValidHttpUrl(customUrl)) {
+      customBadge.className = 'overlay-status-badge active';
+      customBadge.textContent = '🟢 Aktif (Live)';
+    } else {
+      customBadge.className = 'overlay-status-badge inactive';
+      customBadge.textContent = '⚪ Belum disetel';
+    }
+  }
+}
+
+let donationInputDebounce = null;
+function onDonationUrlInputChanged() {
+  const saweriaInput = document.getElementById('saweriaOverlayUrl');
+  const takoInput = document.getElementById('takoOverlayUrl');
+  const customInput = document.getElementById('customOverlayUrl');
+
+  if (saweriaInput) state.donations.saweriaUrl = saweriaInput.value.trim();
+  if (takoInput) state.donations.takoUrl = takoInput.value.trim();
+  if (customInput) state.donations.customUrl = customInput.value.trim();
+
+  updateDonationBadges();
+
+  if (donationInputDebounce) clearTimeout(donationInputDebounce);
+  donationInputDebounce = setTimeout(() => {
+    saveDonationIntegrationUrls(false);
+  }, 600);
+}
+
+function saveDonationIntegrationUrls(showFeedback = true) {
+  const saweriaInput = document.getElementById('saweriaOverlayUrl');
+  const takoInput = document.getElementById('takoOverlayUrl');
+  const customInput = document.getElementById('customOverlayUrl');
+
+  if (saweriaInput) state.donations.saweriaUrl = saweriaInput.value.trim();
+  if (takoInput) state.donations.takoUrl = takoInput.value.trim();
+  if (customInput) state.donations.customUrl = customInput.value.trim();
+
+  saveSavedAccountsToStorage();
+  applyDonationOverlays();
+
+  if (showFeedback) {
+    playRetroSound('connect');
+    let activeNames = [];
+    if (state.donations.takoUrl) activeNames.push('Tako');
+    if (state.donations.saweriaUrl) activeNames.push('Saweria');
+    if (state.donations.customUrl) activeNames.push('Custom');
+
+    if (activeNames.length > 0) {
+      addSystemMessage(`✅ Overlay ${activeNames.join(' & ')} tersimpan dan aktif di atas chat!`);
+    } else {
+      addSystemMessage('Pengaturan URL overlay donasi tersimpan.');
+    }
+  }
+}
+
+function reloadAllDonationOverlays() {
+  playRetroSound('click');
+  const takoFrame = document.getElementById('takoOverlayFrame');
+  const saweriaFrame = document.getElementById('saweriaOverlayFrame');
+  const customFrame = document.getElementById('customOverlayFrame');
+
+  let reloadedCount = 0;
+  const ts = Date.now();
+
+  if (takoFrame && state.donations.takoUrl && isValidHttpUrl(state.donations.takoUrl)) {
+    const cleanUrl = state.donations.takoUrl;
+    const connector = cleanUrl.includes('?') ? '&' : '?';
+    takoFrame.src = `${cleanUrl}${connector}_reload=${ts}`;
+    takoFrame.setAttribute('data-active-src', cleanUrl);
+    takoFrame.classList.remove('hidden');
+    reloadedCount++;
+  }
+
+  if (saweriaFrame && state.donations.saweriaUrl && isValidHttpUrl(state.donations.saweriaUrl)) {
+    const cleanUrl = state.donations.saweriaUrl;
+    const connector = cleanUrl.includes('?') ? '&' : '?';
+    saweriaFrame.src = `${cleanUrl}${connector}_reload=${ts}`;
+    saweriaFrame.setAttribute('data-active-src', cleanUrl);
+    saweriaFrame.classList.remove('hidden');
+    reloadedCount++;
+  }
+
+  if (customFrame && state.donations.customUrl && isValidHttpUrl(state.donations.customUrl)) {
+    const cleanUrl = state.donations.customUrl;
+    const connector = cleanUrl.includes('?') ? '&' : '?';
+    customFrame.src = `${cleanUrl}${connector}_reload=${ts}`;
+    customFrame.setAttribute('data-active-src', cleanUrl);
+    customFrame.classList.remove('hidden');
+    reloadedCount++;
+  }
+
+  updateDonationBadges();
+
+  if (reloadedCount > 0) {
+    addSystemMessage(`🔄 ${reloadedCount} overlay donasi dimuat ulang.`);
+  } else {
+    addSystemMessage('ℹ️ Masukkan URL Tako atau Saweria terlebih dahulu.');
+  }
+}
+
+function updateDonationsUI() {
+  const chkAlert = document.getElementById('chkDonationAlert');
+  const chkMedser = document.getElementById('chkMedserAlert');
+  const chkLb = document.getElementById('chkLeaderboard');
+  const saweriaInput = document.getElementById('saweriaOverlayUrl');
+  const takoInput = document.getElementById('takoOverlayUrl');
+  const customInput = document.getElementById('customOverlayUrl');
+
+  if (chkAlert) chkAlert.checked = state.donations.alertEnabled !== false;
+  if (chkMedser) chkMedser.checked = state.donations.medserEnabled !== false;
+  if (chkLb) chkLb.checked = state.donations.leaderboardEnabled !== false;
+  if (saweriaInput && state.donations.saweriaUrl) saweriaInput.value = state.donations.saweriaUrl;
+  if (takoInput && state.donations.takoUrl) takoInput.value = state.donations.takoUrl;
+  if (customInput && state.donations.customUrl) customInput.value = state.donations.customUrl;
+
+  applyDonationOverlays();
 }
