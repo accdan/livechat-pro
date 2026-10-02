@@ -128,39 +128,6 @@
 
       <!-- Livechat Feed (Transparan di bawah BAR) -->
       <main class="chat-viewport-container">
-        <!-- Donation Alert Popup (Saweria, Tako, TikTok Gift, YT Super Chat) -->
-        <div id="donationAlertContainer" class="donation-alert-container hidden">
-          <div class="donation-alert-card" id="donationAlertCard">
-            <div class="donation-badge-row">
-              <span class="donation-platform-badge" id="donationPlatformBadge">🎁 DONASI</span>
-              <span class="donation-time" id="donationAlertTime">Baru saja</span>
-            </div>
-            <div class="donation-main-info">
-              <span class="donation-donor" id="donationAlertDonor">Donatur</span>
-              <span class="donation-amount" id="donationAlertAmount">Rp 50.000</span>
-            </div>
-            <div class="donation-message" id="donationAlertMessage">Semangat streaming-nya!</div>
-          </div>
-        </div>
-
-        <!-- Medser (Media Share) Alert Popup -->
-        <div id="medserAlertContainer" class="medser-alert-container hidden">
-          <div class="medser-alert-card" id="medserAlertCard">
-            <div class="medser-badge-row">
-              <span class="medser-badge">🎬 MEDIA SHARE</span>
-              <span class="medser-donor" id="medserAlertDonor">User</span>
-            </div>
-            <div class="medser-title-row">
-              <span class="medser-icon">🎵</span>
-              <span class="medser-title" id="medserAlertTitle">Nama Media / Lagu</span>
-            </div>
-            <div class="medser-footer-row">
-              <span class="medser-amount" id="medserAlertAmount">Rp 25.000</span>
-              <span class="medser-duration" id="medserAlertDuration">⏱ 01:30</span>
-            </div>
-          </div>
-        </div>
-
         <div id="chatFeed" class="chat-feed transparent-feed">
           <!-- Chat bubbles rendered dynamically here -->
         </div>
@@ -170,16 +137,6 @@
           ⬇ Pesan Baru di Bawah
         </button>
       </main>
-
-      <!-- Live Donation Overlay Browser Sources (Tako, Saweria, Custom) -->
-      <div id="liveDonationOverlaysContainer" class="live-donation-overlays-container" aria-hidden="true">
-        <iframe id="takoOverlayFrame" class="donation-overlay-iframe hidden" title="Tako Alert Overlay" allow="autoplay"
-          referrerpolicy="no-referrer"></iframe>
-        <iframe id="saweriaOverlayFrame" class="donation-overlay-iframe hidden" title="Saweria Alert Overlay"
-          allow="autoplay" referrerpolicy="no-referrer"></iframe>
-        <iframe id="customOverlayFrame" class="donation-overlay-iframe hidden" title="Custom Alert Overlay"
-          allow="autoplay" referrerpolicy="no-referrer"></iframe>
-      </div>
 
     </div>
 
@@ -605,170 +562,141 @@
           <!-- Tab 3: Donasi & Alert -->
           <div id="tabDonation" class="tab-pane">
 
-            <!-- Alert Toggles -->
-            <div class="section-box compact-box">
+            <!-- 1. Panel Donasi Tako (Tako.id) -->
+            <div class="section-box compact-box donation-platform-box tako-box">
               <div class="section-header-split">
-                <h4 class="section-title-dark">
-                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-                  Notifikasi Donasi
+                <h4 class="section-title-dark" style="color: #ea580c;">
+                  <span style="font-size: 15px;">🐙</span>
+                  Panel Donasi Tako (Tako.id)
                 </h4>
-                <span class="badge-optional">Modul Terpisah</span>
+                <span class="overlay-status-badge inactive" id="takoStatusBadge">Belum disetel</span>
               </div>
-              <p class="section-desc">Notifikasi popup donasi, media share, dan leaderboard saat streaming.</p>
+              <p class="section-desc">Konfigurasi alert donasi dan media share khusus Tako dengan panel mengambang mandiri.</p>
 
-              <div class="setting-toggle-row">
-                <div>
-                  <strong class="toggle-label">Popup Alert Donasi</strong>
-                  <p class="setting-hint">Muncul di atas chat saat ada donasi masuk</p>
-                </div>
-                <label class="switch"><input type="checkbox" id="chkDonationAlert" checked onchange="toggleDonationAlertSetting(this.checked)"><span class="slider"></span></label>
-              </div>
-
-              <div class="setting-toggle-row">
-                <div>
-                  <strong class="toggle-label">Popup Medser (Media Share)</strong>
-                  <p class="setting-hint">Notifikasi judul video / lagu media share</p>
-                </div>
-                <label class="switch"><input type="checkbox" id="chkMedserAlert" checked onchange="toggleMedserAlertSetting(this.checked)"><span class="slider"></span></label>
-              </div>
-
-              <div class="setting-toggle-row">
-                <div>
-                  <strong class="toggle-label">Widget Leaderboard</strong>
-                  <p class="setting-hint">Ranking donatur teratas sesi live</p>
-                </div>
-                <label class="switch"><input type="checkbox" id="chkLeaderboard" checked onchange="toggleLeaderboardSetting(this.checked)"><span class="slider"></span></label>
-              </div>
-            </div>
-
-            <!-- Floating Windows Control -->
-            <div class="section-box compact-box">
-              <h4 class="section-title-dark">
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
-                Panel Mengambang
-              </h4>
-              <p class="section-desc">Buka panel donasi, leaderboard, dan media share dalam jendela mengambang terpisah yang dapat diatur ukurannya.</p>
-
-              <!-- Main Open Floating Window Button -->
-              <button class="btn-action btn-green-pastel full-width mb-2" onclick="openFloatingDonationWindow('overlay')">
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-                Buka Jendela Mengambang
-              </button>
-
-              <!-- Donation Alert floating panel -->
-              <div class="float-panel-row">
-                <div class="float-panel-label">
-                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#e55" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-                  <span>Alert Donasi (Overlay)</span>
-                </div>
-                <div class="float-panel-controls">
-                  <button class="float-ctrl-btn" onclick="openFloatingDonationWindow('overlay')" title="Buka Tab Overlay di Jendela Mengambang">
-                    <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-                  </button>
-                  <button class="float-ctrl-btn" onclick="toggleFdwLock()" id="lockDonationAlert" title="Lock Posisi">
-                    <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                  </button>
-                  <button class="float-ctrl-btn" onclick="reloadFdwIframe()" title="Muat Ulang Iframe">
-                    <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                  </button>
-                </div>
-              </div>
-
-              <!-- Leaderboard floating panel -->
-              <div class="float-panel-row">
-                <div class="float-panel-label">
-                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#f5a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                  <span>Leaderboard</span>
-                </div>
-                <div class="float-panel-controls">
-                  <button class="float-ctrl-btn" onclick="openFloatingDonationWindow('leaderboard')" title="Buka Tab Leaderboard">
-                    <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-                  </button>
-                  <button class="float-ctrl-btn" onclick="clearLeaderboard()" title="Reset Leaderboard">
-                    <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                  </button>
-                </div>
-              </div>
-
-              <!-- Media Share floating panel -->
-              <div class="float-panel-row">
-                <div class="float-panel-label">
-                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#5af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-                  <span>Media Share</span>
-                </div>
-                <div class="float-panel-controls">
-                  <button class="float-ctrl-btn" onclick="openFloatingDonationWindow('mediashare')" title="Buka Tab Media Share">
-                    <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-                  </button>
-                  <button class="float-ctrl-btn" onclick="triggerTestMedserAlert()" title="Test Alert Media Share">
-                    <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Overlay Integration -->
-            <div class="section-box compact-box">
-              <div class="section-header-split">
-                <h4 class="section-title-dark">
-                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                  Integrasi Overlay
-                </h4>
-                <button class="float-ctrl-btn" onclick="reloadAllDonationOverlays()" title="Reload All">
-                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                </button>
-              </div>
-              <p class="section-desc">URL Browser Source dari Tako / Saweria / Trakteer.</p>
-
+              <!-- URL Alert Tako -->
               <div class="input-form-group mt-1">
-                <div class="overlay-status-row">
-                  <label class="small-label">Tako URL:</label>
-                  <span class="overlay-status-badge inactive" id="takoStatusBadge">Belum disetel</span>
-                </div>
+                <label class="small-label">URL Alert Donasi Tako:</label>
                 <input type="text" id="takoOverlayUrl" class="form-input" placeholder="https://tako.id/overlay/..." oninput="onDonationUrlInputChanged()" onchange="saveDonationIntegrationUrls(false)">
               </div>
 
-              <div class="input-form-group mt-2">
-                <div class="overlay-status-row">
-                  <label class="small-label">Saweria URL:</label>
-                  <span class="overlay-status-badge inactive" id="saweriaStatusBadge">Belum disetel</span>
-                </div>
+              <!-- URL Media Share Tako -->
+              <div class="input-form-group mt-1">
+                <label class="small-label">URL Media Share Tako (Opsional):</label>
+                <input type="text" id="takoMedserOverlayUrl" class="form-input" placeholder="https://tako.id/mediashare/..." oninput="onDonationUrlInputChanged()" onchange="saveDonationIntegrationUrls(false)">
+              </div>
+
+              <!-- Action buttons for Tako -->
+              <div class="actions-buttons-grid mt-2">
+                <button class="btn-action btn-green-pastel" onclick="openFloatingDonationWindow('tako-alert')" title="Buka Jendela Alert Tako">
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                  Buka Alert Tako
+                </button>
+                <button class="btn-action" onclick="openFloatingDonationWindow('tako-medser')" title="Buka Jendela Media Share Tako">
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                  Buka Medser Tako
+                </button>
+              </div>
+            </div>
+
+            <!-- 2. Panel Donasi Saweria (Saweria.co) -->
+            <div class="section-box compact-box donation-platform-box saweria-box">
+              <div class="section-header-split">
+                <h4 class="section-title-dark" style="color: #d97706;">
+                  <span style="font-size: 15px;">🧁</span>
+                  Panel Donasi Saweria (Saweria.co)
+                </h4>
+                <span class="overlay-status-badge inactive" id="saweriaStatusBadge">Belum disetel</span>
+              </div>
+              <p class="section-desc">Konfigurasi alert donasi dan media share khusus Saweria dengan panel mengambang mandiri.</p>
+
+              <!-- URL Alert Saweria -->
+              <div class="input-form-group mt-1">
+                <label class="small-label">URL Alert Donasi Saweria:</label>
                 <input type="text" id="saweriaOverlayUrl" class="form-input" placeholder="https://saweria.co/overlays/alert?streamKey=..." oninput="onDonationUrlInputChanged()" onchange="saveDonationIntegrationUrls(false)">
               </div>
 
-              <div class="input-form-group mt-2">
-                <div class="overlay-status-row">
-                  <label class="small-label">URL Lainnya (Trakteer / Sociabuzz):</label>
-                  <span class="overlay-status-badge inactive" id="customStatusBadge">Belum disetel</span>
-                </div>
+              <!-- URL Media Share Saweria -->
+              <div class="input-form-group mt-1">
+                <label class="small-label">URL Media Share Saweria (Opsional):</label>
+                <input type="text" id="saweriaMedserOverlayUrl" class="form-input" placeholder="https://saweria.co/overlays/mediashare?streamKey=..." oninput="onDonationUrlInputChanged()" onchange="saveDonationIntegrationUrls(false)">
+              </div>
+
+              <!-- Action buttons for Saweria -->
+              <div class="actions-buttons-grid mt-2">
+                <button class="btn-action btn-green-pastel" onclick="openFloatingDonationWindow('saweria-alert')" title="Buka Jendela Alert Saweria">
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                  Buka Alert Saweria
+                </button>
+                <button class="btn-action" onclick="openFloatingDonationWindow('saweria-medser')" title="Buka Jendela Media Share Saweria">
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                  Buka Medser Saweria
+                </button>
+              </div>
+            </div>
+
+            <!-- 3. Panel Donasi Custom (Trakteer / Sociabuzz) -->
+            <div class="section-box compact-box donation-platform-box custom-box">
+              <div class="section-header-split">
+                <h4 class="section-title-dark" style="color: #dc2626;">
+                  <span style="font-size: 15px;">🎁</span>
+                  Panel Donasi Trakteer & Lainnya
+                </h4>
+                <span class="overlay-status-badge inactive" id="customStatusBadge">Belum disetel</span>
+              </div>
+              <p class="section-desc">URL overlay browser source untuk Trakteer, Sociabuzz, atau platform donasi kustom lainnya.</p>
+
+              <div class="input-form-group mt-1">
+                <label class="small-label">URL Overlay Custom:</label>
                 <input type="text" id="customOverlayUrl" class="form-input" placeholder="https://trakteer.id/..." oninput="onDonationUrlInputChanged()" onchange="saveDonationIntegrationUrls(false)">
               </div>
 
               <div class="actions-buttons-grid mt-2">
-                <button class="btn-action btn-green-pastel" onclick="saveDonationIntegrationUrls(true)">
-                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                  Simpan & Aktifkan
+                <button class="btn-action btn-green-pastel" onclick="openFloatingDonationWindow('custom-alert')" title="Buka Jendela Alert Custom">
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                  Buka Alert Custom
                 </button>
-                <button class="btn-action secondary" onclick="reloadAllDonationOverlays()">
-                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                  Muat Ulang
+                <button class="btn-action secondary" onclick="openFloatingDonationWindow('overlay')" title="Buka Panel Lengkap Gabungan">
+                  Buka Panel Semua-in-1
                 </button>
               </div>
             </div>
 
-            <!-- Test Simulation -->
-            <div class="section-box compact-box">
-              <h4 class="section-title-dark">
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                Uji Coba Alert
-              </h4>
-              <div class="actions-buttons-grid">
-                <button class="btn-action" onclick="triggerTestDonationAlert('saweria')">Test Saweria</button>
-                <button class="btn-action" onclick="triggerTestDonationAlert('tako')">Test Tako</button>
-                <button class="btn-action" onclick="triggerTestMedserAlert()">Test Medser</button>
-                <button class="btn-action secondary" onclick="triggerTestLeaderboardUpdate()">Test Leaderboard</button>
+            <!-- 4. Panel Leaderboard Sesi Live -->
+            <div class="section-box compact-box donation-platform-box lb-box">
+              <div class="section-header-split">
+                <h4 class="section-title-dark" style="color: #7c3aed;">
+                  <span style="font-size: 15px;">🏆</span>
+                  Panel Leaderboard Donatur
+                </h4>
+                <span class="badge-optional">Widget Peringkat</span>
+              </div>
+              <p class="section-desc">Widget ranking top donatur sesi live saat ini dalam jendela transparan mengambang terpisah.</p>
+
+              <div class="actions-buttons-grid mt-2">
+                <button class="btn-action btn-green-pastel" onclick="openFloatingDonationWindow('leaderboard')" title="Buka Jendela Leaderboard Mengambang">
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                  Buka Leaderboard
+                </button>
+                <button class="btn-action danger" onclick="clearLeaderboard()" title="Reset Leaderboard Sesi">
+                  🔄 Reset
+                </button>
               </div>
             </div>
+
+            <!-- Global Action Bar -->
+            <div class="section-box compact-box">
+              <div class="actions-buttons-grid">
+                <button class="btn-action btn-green-pastel" onclick="saveDonationIntegrationUrls(true)">
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  Simpan Semua URL
+                </button>
+                <button class="btn-action secondary" onclick="reloadAllDonationOverlays()">
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                  Muat Ulang Semua
+                </button>
+              </div>
+            </div>
+
           </div>
 
           <!-- Tab 4: Kontrol, Sistem & Filter -->
@@ -1246,7 +1174,6 @@
             <span class="fdw-label">Peringkat Donatur Live</span>
           </div>
           <div class="fdw-toolbar-right">
-            <button class="fdw-btn-action" onclick="triggerTestDonationAlert('saweria')">Test Donasi</button>
             <button class="fdw-btn-action danger" onclick="clearLeaderboard()">Reset</button>
           </div>
         </div>
@@ -1260,9 +1187,6 @@
         <div class="fdw-toolbar">
           <div class="fdw-toolbar-left">
             <span class="fdw-label">Player / Status Media Share</span>
-          </div>
-          <div class="fdw-toolbar-right">
-            <button class="fdw-btn-action" onclick="triggerTestMedserAlert()">Test Media Share</button>
           </div>
         </div>
         <div class="fdw-mediashare-body">

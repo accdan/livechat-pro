@@ -346,31 +346,12 @@ body.bg-obs-green {
   transform: rotate(0deg) scale(1.1);
 }
 
-/* Live Donation Overlays Container (Tako, Saweria, Custom) */
+/* Live Donation Overlays Container (Moved to Standalone Floating Panels) */
 .live-donation-overlays-container {
-  position: absolute;
-  top: var(--bar-height, 31px);
-  left: 0;
-  width: 100%;
-  height: calc(100% - var(--bar-height, 31px));
-  pointer-events: none;
-  z-index: 85;
-  overflow: hidden;
-  background: transparent;
+  display: none !important;
 }
 
 .donation-overlay-iframe {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  border: none;
-  background: transparent;
-  pointer-events: none;
-}
-
-.donation-overlay-iframe.hidden {
   display: none !important;
 }
 
@@ -2314,19 +2295,6 @@ body.high-contrast .chat-username {
    ========================================================================== */
 .donation-alert-container,
 .medser-alert-container {
-  position: absolute;
-  top: 10px;
-  left: 8px;
-  right: 8px;
-  z-index: 150;
-  pointer-events: none;
-  display: flex;
-  justify-content: center;
-  animation: alertSlideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.donation-alert-container.hidden,
-.medser-alert-container.hidden {
   display: none !important;
 }
 
@@ -2716,15 +2684,18 @@ body.high-contrast .chat-username {
   resize: both;
   overflow: hidden;
   z-index: 9999;
-  background: rgba(18, 22, 33, 0.95);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: transparent !important;
   border-radius: 12px;
-  border: 1px solid rgba(157, 176, 255, 0.4);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  border: 1px dashed rgba(157, 176, 255, 0.45);
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   user-select: none;
+  transition: border-color 0.2s ease;
+}
+
+.floating-donation-window:hover {
+  border-color: rgba(157, 176, 255, 0.85);
 }
 
 .floating-donation-window.hidden {
@@ -2733,7 +2704,31 @@ body.high-contrast .chat-username {
 
 .floating-donation-window.locked {
   resize: none !important;
-  border-color: rgba(16, 185, 129, 0.5);
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
+}
+
+.floating-donation-window.locked .fdw-header {
+  cursor: default !important;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.floating-donation-window.locked:hover .fdw-header {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.floating-donation-window.locked .fdw-toolbar {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.floating-donation-window.locked:hover .fdw-toolbar {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* Floating Window Header (Pastel Blue) */
@@ -2741,12 +2736,16 @@ body.high-contrast .chat-username {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #9db0ff;
+  background: rgba(157, 176, 255, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   padding: 5px 8px;
   cursor: grab;
   border-bottom: 1px solid rgba(0, 0, 0, 0.15);
   flex-shrink: 0;
   gap: 6px;
+  border-radius: 10px 10px 0 0;
+  transition: opacity 0.2s ease;
 }
 
 .fdw-header:active {
@@ -2864,7 +2863,7 @@ body.high-contrast .chat-username {
   min-height: 0;
   overflow: hidden;
   position: relative;
-  background: rgba(14, 18, 27, 0.95);
+  background: transparent !important;
 }
 
 .fdw-pane {
@@ -2873,6 +2872,7 @@ body.high-contrast .chat-username {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  background: transparent !important;
 }
 
 .fdw-pane.active {
@@ -2885,9 +2885,12 @@ body.high-contrast .chat-username {
   align-items: center;
   justify-content: space-between;
   padding: 5px 8px;
-  background: rgba(255, 255, 255, 0.04);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
+  transition: opacity 0.2s ease;
 }
 
 .fdw-toolbar-left,
@@ -2952,14 +2955,14 @@ body.high-contrast .chat-username {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  background: transparent;
+  background: transparent !important;
 }
 
 .fdw-iframe {
   width: 100%;
   height: 100%;
   border: none;
-  background: transparent;
+  background: transparent !important;
   display: block;
 }
 
@@ -2972,7 +2975,11 @@ body.high-contrast .chat-username {
   justify-content: center;
   padding: 16px;
   text-align: center;
-  background: rgba(14, 18, 27, 0.9);
+  background: rgba(14, 18, 27, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 8px;
+  margin: 10px;
 }
 
 .fdw-placeholder.hidden {
@@ -3008,8 +3015,10 @@ body.high-contrast .chat-username {
   align-items: center;
   justify-content: space-between;
   padding: 6px 9px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   font-size: 11px;
 }

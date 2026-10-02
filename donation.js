@@ -30,12 +30,16 @@ if (typeof window !== 'undefined') {
   }, true);
 }
 
+let currentPanelId = 'overlay';
+
 let donationState = {
   isLocked: false,
   currentTab: 'overlay',
   donations: {
     takoUrl: '',
+    takoMedserUrl: '',
     saweriaUrl: '',
+    saweriaMedserUrl: '',
     customUrl: '',
     alertEnabled: true,
     medserEnabled: true,
@@ -96,6 +100,74 @@ function escapeHtml(str) {
   })[m]);
 }
 
+// Initialize dedicated panel mode
+function initPanelFromQueryOrIpc(panelId) {
+  if (!panelId) {
+    const urlParams = new URLSearchParams(window.location.search);
+    panelId = urlParams.get('panel') || 'overlay';
+  }
+  currentPanelId = panelId;
+
+  const titleEl = document.getElementById('fdwTitle');
+  const iconSlot = document.getElementById('fdwIconSlot');
+  const tabsGroup = document.getElementById('fdwTabsGroup');
+  const toolbarLeft = document.getElementById('fdwToolbarLeft');
+
+  if (panelId === 'tako-alert') {
+    if (titleEl) titleEl.textContent = 'Tako - Alert Donasi';
+    if (iconSlot) iconSlot.innerHTML = '🐙';
+    if (tabsGroup) tabsGroup.style.display = 'none';
+    if (toolbarLeft) toolbarLeft.style.display = 'none';
+    switchFdwTab('overlay');
+  } else if (panelId === 'tako-medser') {
+    if (titleEl) titleEl.textContent = 'Tako - Media Share';
+    if (iconSlot) iconSlot.innerHTML = '🎬';
+    if (tabsGroup) tabsGroup.style.display = 'none';
+    if (toolbarLeft) toolbarLeft.style.display = 'none';
+    if (donationState.donations.takoMedserUrl && isValidHttpUrl(donationState.donations.takoMedserUrl)) {
+      switchFdwTab('overlay');
+    } else {
+      switchFdwTab('mediashare');
+    }
+  } else if (panelId === 'saweria-alert') {
+    if (titleEl) titleEl.textContent = 'Saweria - Alert Donasi';
+    if (iconSlot) iconSlot.innerHTML = '🧁';
+    if (tabsGroup) tabsGroup.style.display = 'none';
+    if (toolbarLeft) toolbarLeft.style.display = 'none';
+    switchFdwTab('overlay');
+  } else if (panelId === 'saweria-medser') {
+    if (titleEl) titleEl.textContent = 'Saweria - Media Share';
+    if (iconSlot) iconSlot.innerHTML = '🎬';
+    if (tabsGroup) tabsGroup.style.display = 'none';
+    if (toolbarLeft) toolbarLeft.style.display = 'none';
+    if (donationState.donations.saweriaMedserUrl && isValidHttpUrl(donationState.donations.saweriaMedserUrl)) {
+      switchFdwTab('overlay');
+    } else {
+      switchFdwTab('mediashare');
+    }
+  } else if (panelId === 'custom-alert') {
+    if (titleEl) titleEl.textContent = 'Custom - Alert Donasi';
+    if (iconSlot) iconSlot.innerHTML = '🎁';
+    if (tabsGroup) tabsGroup.style.display = 'none';
+    if (toolbarLeft) toolbarLeft.style.display = 'none';
+    switchFdwTab('overlay');
+  } else if (panelId === 'leaderboard') {
+    if (titleEl) titleEl.textContent = 'Leaderboard Donatur';
+    if (iconSlot) iconSlot.innerHTML = '🏆';
+    if (tabsGroup) tabsGroup.style.display = 'none';
+    switchFdwTab('leaderboard');
+  } else {
+    // Default multi-tab
+    if (titleEl) titleEl.textContent = 'Live Donation Panel';
+    if (iconSlot) iconSlot.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>';
+    if (tabsGroup) tabsGroup.style.display = 'flex';
+    if (toolbarLeft) toolbarLeft.style.display = 'flex';
+    switchFdwTab('overlay');
+  }
+
+  updateOverlayIframe();
+}
+
 // Switch Tabs
 function switchFdwTab(tabName) {
   playSound('click');
@@ -139,7 +211,7 @@ function toggleDonationLock(forceVal) {
   }
 
   if (electronIpc) {
-    electronIpc.send('set-donation-locked', donationState.isLocked);
+    electronIpc.send('set-donation-locked', { panelId: currentPanelId, isLocked: donationState.isLocked });
   }
 }
 
@@ -157,7 +229,7 @@ function reloadCurrentTab() {
 function closeDonationWindow() {
   playSound('click');
   if (electronIpc) {
-    electronIpc.send('close-donation-window');
+    electronIpc.send('close-donation-window', currentPanelId);
   } else {
     window.close();
   }
@@ -174,17 +246,29 @@ function updateOverlayIframe() {
   const select = document.getElementById('fdwOverlaySourceSelect');
   if (!iframe) return;
 
-  const choice = select ? select.value : 'auto';
   let targetUrl = '';
 
-  if (choice === 'tako') {
-    targetUrl = donationState.donations.takoUrl;
-  } else if (choice === 'saweria') {
-    targetUrl = donationState.donations.saweriaUrl;
-  } else if (choice === 'custom') {
-    targetUrl = donationState.donations.customUrl;
+  if (currentPanelId === 'tako-alert') {
+    targetUrl = donationState.donations.takoUrl || '';
+  } else if (currentPanelId === 'tako-medser') {
+    targetUrl = donationState.donations.takoMedserUrl || '';
+  } else if (currentPanelId === 'saweria-alert') {
+    targetUrl = donationState.donations.saweriaUrl || '';
+  } else if (currentPanelId === 'saweria-medser') {
+    targetUrl = donationState.donations.saweriaMedserUrl || '';
+  } else if (currentPanelId === 'custom-alert') {
+    targetUrl = donationState.donations.customUrl || '';
   } else {
-    targetUrl = donationState.donations.takoUrl || donationState.donations.saweriaUrl || donationState.donations.customUrl || '';
+    const choice = select ? select.value : 'auto';
+    if (choice === 'tako') {
+      targetUrl = donationState.donations.takoUrl;
+    } else if (choice === 'saweria') {
+      targetUrl = donationState.donations.saweriaUrl;
+    } else if (choice === 'custom') {
+      targetUrl = donationState.donations.customUrl;
+    } else {
+      targetUrl = donationState.donations.takoUrl || donationState.donations.saweriaUrl || donationState.donations.customUrl || '';
+    }
   }
 
   if (targetUrl && isValidHttpUrl(targetUrl)) {
@@ -198,7 +282,24 @@ function updateOverlayIframe() {
     iframe.src = 'about:blank';
     iframe.removeAttribute('data-src');
     iframe.classList.add('hidden');
-    if (placeholder) placeholder.classList.remove('hidden');
+    if (placeholder) {
+      placeholder.classList.remove('hidden');
+      const titleP = placeholder.querySelector('.fdw-placeholder-text');
+      const subP = placeholder.querySelector('.fdw-placeholder-sub');
+      if (currentPanelId === 'tako-alert' && titleP && subP) {
+        titleP.textContent = 'Belum ada URL Alert Tako.';
+        subP.textContent = 'Atur URL Tako di menu Pengaturan > Donasi > Panel Tako.';
+      } else if (currentPanelId === 'saweria-alert' && titleP && subP) {
+        titleP.textContent = 'Belum ada URL Alert Saweria.';
+        subP.textContent = 'Atur URL Saweria di menu Pengaturan > Donasi > Panel Saweria.';
+      } else if (currentPanelId === 'tako-medser' && titleP && subP) {
+        titleP.textContent = 'Belum ada URL Media Share Tako.';
+        subP.textContent = 'Masukkan URL Media Share Tako di menu Pengaturan > Donasi.';
+      } else if (currentPanelId === 'saweria-medser' && titleP && subP) {
+        titleP.textContent = 'Belum ada URL Media Share Saweria.';
+        subP.textContent = 'Masukkan URL Media Share Saweria di menu Pengaturan > Donasi.';
+      }
+    }
   }
 }
 
@@ -329,9 +430,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     } catch (e) {}
 
-    // 2. Listen to tab switch requested from main window
+    // 2. Listen to dedicated widget panel initialization
+    electronIpc.on('init-widget-panel', (event, panelId) => {
+      initPanelFromQueryOrIpc(panelId);
+    });
+
     electronIpc.on('switch-donation-tab', (event, tab) => {
-      if (tab) switchFdwTab(tab);
+      if (tab) {
+        if (tab.includes('-')) {
+          initPanelFromQueryOrIpc(tab);
+        } else {
+          switchFdwTab(tab);
+        }
+      }
     });
 
     // 3. Real-time broadcast sync from main chat window
@@ -342,11 +453,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     electronIpc.on('medser-event', (event, data) => {
       updateMedserCard(data);
-      switchFdwTab('mediashare');
+      if (currentPanelId === 'overlay' || currentPanelId === 'tako-medser' || currentPanelId === 'saweria-medser') {
+        switchFdwTab('mediashare');
+      }
     });
 
     electronIpc.on('donation-event', (event, data) => {
-      // Trigger subtle pulse or sound
       playSound('donation');
     });
 
@@ -358,7 +470,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Initial render
-  updateOverlayIframe();
+  // Initial render based on URL parameter or default
+  initPanelFromQueryOrIpc();
   renderLeaderboard();
 });

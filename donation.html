@@ -27,24 +27,46 @@
       height: 100vh;
       display: flex;
       flex-direction: column;
-      background: rgba(18, 22, 33, 0.94);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      background: transparent !important;
       border-radius: 12px;
-      border: 1px solid rgba(157, 176, 255, 0.45);
-      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+      border: 1px dashed rgba(157, 176, 255, 0.45);
+      box-shadow: none;
       overflow: hidden;
       box-sizing: border-box;
+      transition: border-color 0.2s ease;
+    }
+
+    .standalone-donation-window:hover {
+      border-color: rgba(157, 176, 255, 0.85);
     }
 
     .standalone-donation-window.locked {
-      border-color: rgba(16, 185, 129, 0.6);
-      box-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
+      border: 1px solid transparent !important;
+      box-shadow: none !important;
     }
 
     .standalone-donation-window.locked .fdw-header {
       -webkit-app-region: no-drag !important;
       cursor: default !important;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    .standalone-donation-window.locked:hover .fdw-header {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .standalone-donation-window.locked .fdw-toolbar {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    .standalone-donation-window.locked:hover .fdw-toolbar {
+      opacity: 1;
+      pointer-events: auto;
     }
 
     .fdw-header {
@@ -53,11 +75,15 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: #9db0ff;
+      background: rgba(157, 176, 255, 0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       padding: 5px 8px;
       border-bottom: 1px solid rgba(0, 0, 0, 0.15);
       flex-shrink: 0;
       gap: 6px;
+      border-radius: 10px 10px 0 0;
+      transition: opacity 0.2s ease;
     }
 
     .fdw-header:active {
@@ -73,7 +99,7 @@
       min-height: 0;
       display: flex;
       flex-direction: column;
-      background: transparent;
+      background: transparent !important;
       overflow: hidden;
     }
   </style>
@@ -83,12 +109,12 @@
     <!-- Draggable Header Bar -->
     <div class="fdw-header" id="fdwDragHeader">
       <div class="fdw-header-left">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-        <span class="fdw-title">Live Donation Panel</span>
+        <span id="fdwIconSlot"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span>
+        <span class="fdw-title" id="fdwTitle">Live Donation Panel</span>
       </div>
 
-      <!-- Navigation Tabs -->
-      <div class="fdw-tabs">
+      <!-- Navigation Tabs (shown in multi-tab mode, hidden in dedicated single widget mode) -->
+      <div class="fdw-tabs" id="fdwTabsGroup">
         <button class="fdw-tab-btn active" id="fdwTabBtnOverlay" onclick="switchFdwTab('overlay')" title="Overlay Donasi">
           <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
           Overlay
@@ -132,8 +158,8 @@
     <div class="fdw-content">
       <!-- 1. Overlay Iframe Tab -->
       <div id="fdwPaneOverlay" class="fdw-pane active">
-        <div class="fdw-toolbar">
-          <div class="fdw-toolbar-left">
+        <div class="fdw-toolbar" id="fdwToolbarOverlay">
+          <div class="fdw-toolbar-left" id="fdwToolbarLeft">
             <label class="fdw-label">Sumber Overlay:</label>
             <select id="fdwOverlaySourceSelect" class="fdw-select" onchange="onSourceSelectChanged()">
               <option value="auto">Auto (Sesuai URL Tersimpan)</option>
@@ -166,7 +192,6 @@
             <span class="fdw-label">Peringkat Donatur Sesi Ini</span>
           </div>
           <div class="fdw-toolbar-right">
-            <button class="fdw-btn-action" onclick="triggerTestDonation()">Test Donasi</button>
             <button class="fdw-btn-action danger" onclick="resetLeaderboard()">Reset</button>
           </div>
         </div>
@@ -180,9 +205,6 @@
         <div class="fdw-toolbar">
           <div class="fdw-toolbar-left">
             <span class="fdw-label">Player & Status Media Share</span>
-          </div>
-          <div class="fdw-toolbar-right">
-            <button class="fdw-btn-action" onclick="triggerTestMedser()">Test Media Share</button>
           </div>
         </div>
         <div class="fdw-mediashare-body">

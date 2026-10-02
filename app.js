@@ -102,7 +102,9 @@ const state = {
     medserEnabled: true,
     leaderboardEnabled: true,
     saweriaUrl: '',
+    saweriaMedserUrl: '',
     takoUrl: '',
+    takoMedserUrl: '',
     customUrl: ''
   },
   leaderboard: [],
@@ -3725,28 +3727,7 @@ function showDonationAlert({ platform = 'SAWERIA', donor = 'Donatur', amount = '
 
   playRetroSound('donation');
 
-  const container = document.getElementById('donationAlertContainer');
-  const badge = document.getElementById('donationPlatformBadge');
-  const donorEl = document.getElementById('donationAlertDonor');
-  const amountEl = document.getElementById('donationAlertAmount');
-  const msgEl = document.getElementById('donationAlertMessage');
-  const timeEl = document.getElementById('donationAlertTime');
-
-  if (badge) badge.textContent = `🎁 ${platform.toUpperCase()}`;
-  if (donorEl) donorEl.textContent = donor;
-  if (amountEl) amountEl.textContent = amount;
-  if (msgEl) msgEl.textContent = message || 'Terima kasih atas dukungannya!';
-  if (timeEl) timeEl.textContent = getFormattedTime();
-
-  if (container) {
-    container.classList.remove('hidden');
-    if (donationAlertTimer) clearTimeout(donationAlertTimer);
-    donationAlertTimer = setTimeout(() => {
-      container.classList.add('hidden');
-    }, 4500);
-  }
-
-  // Broadcast to standalone donation window
+  // Broadcast to standalone donation windows
   if (electronIpc) {
     electronIpc.send('broadcast-donation-event', {
       platform, donor, amount, message
@@ -3762,38 +3743,7 @@ function showMedserAlert({ donor = 'Donatur', title = 'Video Media Share', amoun
 
   playRetroSound('donation');
 
-  const container = document.getElementById('medserAlertContainer');
-  const donorEl = document.getElementById('medserAlertDonor');
-  const titleEl = document.getElementById('medserAlertTitle');
-  const amountEl = document.getElementById('medserAlertAmount');
-  const durEl = document.getElementById('medserAlertDuration');
-
-  if (donorEl) donorEl.textContent = donor;
-  if (titleEl) titleEl.textContent = title;
-  if (amountEl) amountEl.textContent = amount;
-  if (durEl) durEl.textContent = `⏱ ${duration}`;
-
-  // Also update floating window Media Share tab
-  const fdwTitle = document.getElementById('fdwMedserTitle');
-  const fdwDonor = document.getElementById('fdwMedserDonor');
-  const fdwAmount = document.getElementById('fdwMedserAmount');
-  const fdwDuration = document.getElementById('fdwMedserDuration');
-  const fdwStatus = document.getElementById('fdwMedserStatusText');
-  if (fdwTitle) fdwTitle.textContent = title;
-  if (fdwDonor) fdwDonor.textContent = `Donatur: ${donor}`;
-  if (fdwAmount) fdwAmount.textContent = `Nominal: ${amount}`;
-  if (fdwDuration) fdwDuration.textContent = `Durasi: ${duration}`;
-  if (fdwStatus) fdwStatus.textContent = `Sedang Diputar: ${donor}`;
-
-  if (container) {
-    container.classList.remove('hidden');
-    if (medserAlertTimer) clearTimeout(medserAlertTimer);
-    medserAlertTimer = setTimeout(() => {
-      container.classList.add('hidden');
-    }, 5000);
-  }
-
-  // Broadcast to standalone donation window
+  // Broadcast to standalone donation windows
   if (electronIpc) {
     electronIpc.send('broadcast-medser-event', {
       donor, title, amount, duration
@@ -3941,65 +3891,7 @@ function isValidHttpUrl(str) {
 }
 
 function applyDonationOverlays() {
-  const takoFrame = document.getElementById('takoOverlayFrame');
-  const saweriaFrame = document.getElementById('saweriaOverlayFrame');
-  const customFrame = document.getElementById('customOverlayFrame');
-
-  const takoUrl = (state.donations && state.donations.takoUrl) ? state.donations.takoUrl.trim() : '';
-  const saweriaUrl = (state.donations && state.donations.saweriaUrl) ? state.donations.saweriaUrl.trim() : '';
-  const customUrl = (state.donations && state.donations.customUrl) ? state.donations.customUrl.trim() : '';
-
-  // 1. Mount / Update Tako Overlay Frame
-  if (takoFrame) {
-    if (takoUrl && isValidHttpUrl(takoUrl)) {
-      if (takoFrame.getAttribute('data-active-src') !== takoUrl) {
-        takoFrame.src = takoUrl;
-        takoFrame.setAttribute('data-active-src', takoUrl);
-      }
-      takoFrame.classList.remove('hidden');
-    } else {
-      if (takoFrame.getAttribute('data-active-src')) {
-        takoFrame.src = 'about:blank';
-        takoFrame.removeAttribute('data-active-src');
-      }
-      takoFrame.classList.add('hidden');
-    }
-  }
-
-  // 2. Mount / Update Saweria Overlay Frame
-  if (saweriaFrame) {
-    if (saweriaUrl && isValidHttpUrl(saweriaUrl)) {
-      if (saweriaFrame.getAttribute('data-active-src') !== saweriaUrl) {
-        saweriaFrame.src = saweriaUrl;
-        saweriaFrame.setAttribute('data-active-src', saweriaUrl);
-      }
-      saweriaFrame.classList.remove('hidden');
-    } else {
-      if (saweriaFrame.getAttribute('data-active-src')) {
-        saweriaFrame.src = 'about:blank';
-        saweriaFrame.removeAttribute('data-active-src');
-      }
-      saweriaFrame.classList.add('hidden');
-    }
-  }
-
-  // 3. Mount / Update Custom Overlay Frame
-  if (customFrame) {
-    if (customUrl && isValidHttpUrl(customUrl)) {
-      if (customFrame.getAttribute('data-active-src') !== customUrl) {
-        customFrame.src = customUrl;
-        customFrame.setAttribute('data-active-src', customUrl);
-      }
-      customFrame.classList.remove('hidden');
-    } else {
-      if (customFrame.getAttribute('data-active-src')) {
-        customFrame.src = 'about:blank';
-        customFrame.removeAttribute('data-active-src');
-      }
-      customFrame.classList.add('hidden');
-    }
-  }
-
+  // Overlays are managed by standalone floating donation windows, keeping chat 100% clean
   updateDonationBadges();
 }
 
@@ -4009,11 +3901,13 @@ function updateDonationBadges() {
   const customBadge = document.getElementById('customStatusBadge');
 
   const takoUrl = (state.donations && state.donations.takoUrl) ? state.donations.takoUrl.trim() : '';
+  const takoMedserUrl = (state.donations && state.donations.takoMedserUrl) ? state.donations.takoMedserUrl.trim() : '';
   const saweriaUrl = (state.donations && state.donations.saweriaUrl) ? state.donations.saweriaUrl.trim() : '';
+  const saweriaMedserUrl = (state.donations && state.donations.saweriaMedserUrl) ? state.donations.saweriaMedserUrl.trim() : '';
   const customUrl = (state.donations && state.donations.customUrl) ? state.donations.customUrl.trim() : '';
 
   if (takoBadge) {
-    if (takoUrl && isValidHttpUrl(takoUrl)) {
+    if ((takoUrl && isValidHttpUrl(takoUrl)) || (takoMedserUrl && isValidHttpUrl(takoMedserUrl))) {
       takoBadge.className = 'overlay-status-badge active';
       takoBadge.textContent = '🟢 Aktif (Live)';
     } else {
@@ -4023,7 +3917,7 @@ function updateDonationBadges() {
   }
 
   if (saweriaBadge) {
-    if (saweriaUrl && isValidHttpUrl(saweriaUrl)) {
+    if ((saweriaUrl && isValidHttpUrl(saweriaUrl)) || (saweriaMedserUrl && isValidHttpUrl(saweriaMedserUrl))) {
       saweriaBadge.className = 'overlay-status-badge active';
       saweriaBadge.textContent = '🟢 Aktif (Live)';
     } else {
@@ -4046,11 +3940,15 @@ function updateDonationBadges() {
 let donationInputDebounce = null;
 function onDonationUrlInputChanged() {
   const saweriaInput = document.getElementById('saweriaOverlayUrl');
+  const saweriaMedserInput = document.getElementById('saweriaMedserOverlayUrl');
   const takoInput = document.getElementById('takoOverlayUrl');
+  const takoMedserInput = document.getElementById('takoMedserOverlayUrl');
   const customInput = document.getElementById('customOverlayUrl');
 
   if (saweriaInput) state.donations.saweriaUrl = saweriaInput.value.trim();
+  if (saweriaMedserInput) state.donations.saweriaMedserUrl = saweriaMedserInput.value.trim();
   if (takoInput) state.donations.takoUrl = takoInput.value.trim();
+  if (takoMedserInput) state.donations.takoMedserUrl = takoMedserInput.value.trim();
   if (customInput) state.donations.customUrl = customInput.value.trim();
 
   updateDonationBadges();
@@ -4063,25 +3961,34 @@ function onDonationUrlInputChanged() {
 
 function saveDonationIntegrationUrls(showFeedback = true) {
   const saweriaInput = document.getElementById('saweriaOverlayUrl');
+  const saweriaMedserInput = document.getElementById('saweriaMedserOverlayUrl');
   const takoInput = document.getElementById('takoOverlayUrl');
+  const takoMedserInput = document.getElementById('takoMedserOverlayUrl');
   const customInput = document.getElementById('customOverlayUrl');
 
   if (saweriaInput) state.donations.saweriaUrl = saweriaInput.value.trim();
+  if (saweriaMedserInput) state.donations.saweriaMedserUrl = saweriaMedserInput.value.trim();
   if (takoInput) state.donations.takoUrl = takoInput.value.trim();
+  if (takoMedserInput) state.donations.takoMedserUrl = takoMedserInput.value.trim();
   if (customInput) state.donations.customUrl = customInput.value.trim();
 
   saveSavedAccountsToStorage();
   applyDonationOverlays();
 
+  // Sync URLs to all open standalone floating donation windows
+  if (electronIpc) {
+    electronIpc.send('broadcast-donation-urls', state.donations);
+  }
+
   if (showFeedback) {
     playRetroSound('connect');
     let activeNames = [];
-    if (state.donations.takoUrl) activeNames.push('Tako');
-    if (state.donations.saweriaUrl) activeNames.push('Saweria');
+    if (state.donations.takoUrl || state.donations.takoMedserUrl) activeNames.push('Tako');
+    if (state.donations.saweriaUrl || state.donations.saweriaMedserUrl) activeNames.push('Saweria');
     if (state.donations.customUrl) activeNames.push('Custom');
 
     if (activeNames.length > 0) {
-      addSystemMessage(`✅ Overlay ${activeNames.join(' & ')} tersimpan dan aktif di atas chat!`);
+      addSystemMessage(`✅ Pengaturan URL ${activeNames.join(' & ')} tersimpan dan disinkronkan ke panel!`);
     } else {
       addSystemMessage('Pengaturan URL overlay donasi tersimpan.');
     }
@@ -4090,47 +3997,11 @@ function saveDonationIntegrationUrls(showFeedback = true) {
 
 function reloadAllDonationOverlays() {
   playRetroSound('click');
-  const takoFrame = document.getElementById('takoOverlayFrame');
-  const saweriaFrame = document.getElementById('saweriaOverlayFrame');
-  const customFrame = document.getElementById('customOverlayFrame');
-
-  let reloadedCount = 0;
-  const ts = Date.now();
-
-  if (takoFrame && state.donations.takoUrl && isValidHttpUrl(state.donations.takoUrl)) {
-    const cleanUrl = state.donations.takoUrl;
-    const connector = cleanUrl.includes('?') ? '&' : '?';
-    takoFrame.src = `${cleanUrl}${connector}_reload=${ts}`;
-    takoFrame.setAttribute('data-active-src', cleanUrl);
-    takoFrame.classList.remove('hidden');
-    reloadedCount++;
+  if (electronIpc) {
+    electronIpc.send('broadcast-donation-urls', state.donations);
   }
-
-  if (saweriaFrame && state.donations.saweriaUrl && isValidHttpUrl(state.donations.saweriaUrl)) {
-    const cleanUrl = state.donations.saweriaUrl;
-    const connector = cleanUrl.includes('?') ? '&' : '?';
-    saweriaFrame.src = `${cleanUrl}${connector}_reload=${ts}`;
-    saweriaFrame.setAttribute('data-active-src', cleanUrl);
-    saweriaFrame.classList.remove('hidden');
-    reloadedCount++;
-  }
-
-  if (customFrame && state.donations.customUrl && isValidHttpUrl(state.donations.customUrl)) {
-    const cleanUrl = state.donations.customUrl;
-    const connector = cleanUrl.includes('?') ? '&' : '?';
-    customFrame.src = `${cleanUrl}${connector}_reload=${ts}`;
-    customFrame.setAttribute('data-active-src', cleanUrl);
-    customFrame.classList.remove('hidden');
-    reloadedCount++;
-  }
-
   updateDonationBadges();
-
-  if (reloadedCount > 0) {
-    addSystemMessage(`🔄 ${reloadedCount} overlay donasi dimuat ulang.`);
-  } else {
-    addSystemMessage('ℹ️ Masukkan URL Tako atau Saweria terlebih dahulu.');
-  }
+  addSystemMessage('🔄 Pengaturan dan panel donasi dimuat ulang.');
 }
 
 function updateDonationsUI() {
@@ -4138,14 +4009,18 @@ function updateDonationsUI() {
   const chkMedser = document.getElementById('chkMedserAlert');
   const chkLb = document.getElementById('chkLeaderboard');
   const saweriaInput = document.getElementById('saweriaOverlayUrl');
+  const saweriaMedserInput = document.getElementById('saweriaMedserOverlayUrl');
   const takoInput = document.getElementById('takoOverlayUrl');
+  const takoMedserInput = document.getElementById('takoMedserOverlayUrl');
   const customInput = document.getElementById('customOverlayUrl');
 
   if (chkAlert) chkAlert.checked = state.donations.alertEnabled !== false;
   if (chkMedser) chkMedser.checked = state.donations.medserEnabled !== false;
   if (chkLb) chkLb.checked = state.donations.leaderboardEnabled !== false;
   if (saweriaInput && state.donations.saweriaUrl) saweriaInput.value = state.donations.saweriaUrl;
+  if (saweriaMedserInput && state.donations.saweriaMedserUrl) saweriaMedserInput.value = state.donations.saweriaMedserUrl;
   if (takoInput && state.donations.takoUrl) takoInput.value = state.donations.takoUrl;
+  if (takoMedserInput && state.donations.takoMedserUrl) takoMedserInput.value = state.donations.takoMedserUrl;
   if (customInput && state.donations.customUrl) customInput.value = state.donations.customUrl;
 
   applyDonationOverlays();

@@ -297,36 +297,66 @@ ipcMain.on('toggle-settings-panel', (event, isOpen) => {
 });
 
 // =========================================================================
-// Standalone Live Donation Panel Window (Movable anywhere across all screens)
 // =========================================================================
-let donationWindow = null;
+// Standalone Live Donation Panel Windows (Movable anywhere across all screens)
+// =========================================================================
+const donationWindows = new Map();
 
-function createOrShowDonationWindow(tab = 'overlay') {
-  if (donationWindow && !donationWindow.isDestroyed()) {
-    donationWindow.show();
-    donationWindow.focus();
-    donationWindow.webContents.send('switch-donation-tab', tab);
-    return;
+function getDonationWidgetMeta(panelId = 'overlay') {
+  switch (panelId) {
+    case 'tako-alert':
+      return { title: 'Tako - Alert Donasi', defaultBounds: { width: 380, height: 280 } };
+    case 'tako-medser':
+      return { title: 'Tako - Media Share', defaultBounds: { width: 440, height: 320 } };
+    case 'saweria-alert':
+      return { title: 'Saweria - Alert Donasi', defaultBounds: { width: 380, height: 280 } };
+    case 'saweria-medser':
+      return { title: 'Saweria - Media Share', defaultBounds: { width: 440, height: 320 } };
+    case 'custom-alert':
+      return { title: 'Custom - Alert Donasi', defaultBounds: { width: 380, height: 280 } };
+    case 'leaderboard':
+      return { title: 'Leaderboard Donatur', defaultBounds: { width: 320, height: 360 } };
+    case 'overlay':
+    default:
+      return { title: 'Live Donation Panel', defaultBounds: { width: 380, height: 310 } };
+  }
+}
+
+function createOrShowDonationWindow(panelId = 'overlay') {
+  if (donationWindows.has(panelId)) {
+    const existing = donationWindows.get(panelId);
+    if (existing && !existing.isDestroyed()) {
+      existing.show();
+      existing.focus();
+      existing.webContents.send('switch-donation-tab', panelId);
+      return existing;
+    }
   }
 
-  // Load saved donation window bounds if available
-  let bounds = { width: 380, height: 310 };
+  const meta = getDonationWidgetMeta(panelId);
+  let bounds = Object.assign({}, meta.defaultBounds);
+
+  // Load saved bounds for this specific panel
   try {
     if (fs.existsSync(configFilePath)) {
       const savedConfig = JSON.parse(fs.readFileSync(configFilePath, 'utf8'));
-      if (savedConfig && savedConfig.donationWindowBounds) {
-        bounds = Object.assign(bounds, savedConfig.donationWindowBounds);
+      if (savedConfig) {
+        if (savedConfig.donationWindowsBounds && savedConfig.donationWindowsBounds[panelId]) {
+          bounds = Object.assign(bounds, savedConfig.donationWindowsBounds[panelId]);
+        } else if (savedConfig.donationWindowBounds && panelId === 'overlay') {
+          bounds = Object.assign(bounds, savedConfig.donationWindowBounds);
+        }
       }
     }
   } catch (e) {}
 
-  donationWindow = new BrowserWindow({
-    width: bounds.width || 380,
-    height: bounds.height || 310,
+  const win = new BrowserWindow({
+    width: bounds.width || meta.defaultBounds.width,
+    height: bounds.height || meta.defaultBounds.height,
     x: bounds.x,
     y: bounds.y,
-    minWidth: 280,
-    minHeight: 180,
+    minWidth: 240,
+    minHeight: 150,
     transparent: true,
     frame: false,
     alwaysOnTop: true,
@@ -334,7 +364,7 @@ function createOrShowDonationWindow(tab = 'overlay') {
     resizable: true,
     autoHideMenuBar: true,
     show: true,
-    title: "Live Donation Panel - MultiChatStream",
+    title: `${meta.title} - MultiChatStream`,
     icon: path.join(__dirname, 'favicon.ico'),
     webPreferences: {
       nodeIntegration: true,
@@ -344,71 +374,118 @@ function createOrShowDonationWindow(tab = 'overlay') {
     }
   });
 
-  donationWindow.setAlwaysOnTop(true, 'screen-saver');
+  win.setAlwaysOnTop(true, 'screen-saver');
 
-  let saveDonationBoundsTimeout = null;
-  function debounceSaveDonationBounds() {
-    if (saveDonationBoundsTimeout) clearTimeout(saveDonationBoundsTimeout);
-    saveDonationBoundsTimeout = setTimeout(() => {
-      if (!donationWindow || donationWindow.isDestroyed()) return;
+  let saveBoundsTimeout = null;
+  function debounceSaveBounds() {
+    if (saveBoundsTimeout) clearTimeout(saveBoundsTimeout);
+    saveBoundsTimeout = setTimeout(() => {
+      if (!win || win.isDestroyed()) return;
       try {
-        const b = donationWindow.getBounds();
+        const b = win.getBounds();
         let currentConfig = {};
         if (fs.existsSync(configFilePath)) {
           currentConfig = JSON.parse(fs.readFileSync(configFilePath, 'utf8'));
         }
-        currentConfig.donationWindowBounds = b;
+        if (!currentConfig.donationWindowsBounds) currentConfig.donationWindowsBounds = {};
+        currentConfig.donationWindowsBounds[panelId] = b;
         fs.writeFileSync(configFilePath, JSON.stringify(currentConfig, null, 2), 'utf8');
       } catch (e) {}
     }, 600);
   }
 
-  donationWindow.on('resize', debounceSaveDonationBounds);
-  donationWindow.on('move', debounceSaveDonationBounds);
+  win.on('resize', debounceSaveBounds);
+  win.on('move', debounceSaveBounds);
 
-  donationWindow.loadFile(path.join(__dirname, 'donation.html'));
+  const fileUrl = path.join(__dirname, 'donation.html');
+  win.loadFile(fileUrl, { query: { panel: panelId } });
 
-  donationWindow.webContents.on('did-finish-load', () => {
-    donationWindow.webContents.send('switch-donation-tab', tab);
+  win.webContents.on('did-finish-load', () => {
+    win.webContents.send('init-widget-panel', panelId);
+    win.webContents.send('switch-donation-tab', panelId);
   });
 
-  donationWindow.on('closed', () => {
-    donationWindow = null;
+  win.on('closed', () => {
+    donationWindows.delete(panelId);
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('donation-window-closed');
+      mainWindow.webContents.send('donation-window-closed', panelId);
     }
   });
+
+  donationWindows.set(panelId, win);
+  return win;
 }
 
-ipcMain.on('open-donation-window', (event, tab) => {
-  createOrShowDonationWindow(tab || 'overlay');
+ipcMain.on('open-donation-window', (event, panelId) => {
+  createOrShowDonationWindow(panelId || 'overlay');
 });
 
-ipcMain.on('close-donation-window', () => {
-  if (donationWindow && !donationWindow.isDestroyed()) {
-    donationWindow.close();
-  }
-});
-
-ipcMain.on('toggle-donation-window', (event, tab) => {
-  if (donationWindow && !donationWindow.isDestroyed() && donationWindow.isVisible()) {
-    donationWindow.close();
+ipcMain.on('close-donation-window', (event, panelId) => {
+  if (panelId && donationWindows.has(panelId)) {
+    const win = donationWindows.get(panelId);
+    if (win && !win.isDestroyed()) win.close();
   } else {
-    createOrShowDonationWindow(tab || 'overlay');
+    // If sent from inside a window without ID, close that sender's window
+    for (const [id, win] of donationWindows.entries()) {
+      if (win && !win.isDestroyed() && win.webContents === event.sender) {
+        win.close();
+        return;
+      }
+    }
+    // Fallback: close all or overlay
+    const overlayWin = donationWindows.get('overlay');
+    if (overlayWin && !overlayWin.isDestroyed()) overlayWin.close();
   }
 });
 
-ipcMain.on('set-donation-locked', (event, isLocked) => {
-  if (donationWindow && !donationWindow.isDestroyed()) {
-    donationWindow.setMovable(!isLocked);
-    donationWindow.setResizable(!isLocked);
+ipcMain.on('toggle-donation-window', (event, panelId = 'overlay') => {
+  if (donationWindows.has(panelId)) {
+    const win = donationWindows.get(panelId);
+    if (win && !win.isDestroyed() && win.isVisible()) {
+      win.close();
+      return;
+    }
+  }
+  createOrShowDonationWindow(panelId);
+});
+
+ipcMain.on('set-donation-locked', (event, data) => {
+  const isLocked = typeof data === 'boolean' ? data : Boolean(data && data.isLocked);
+  const targetId = typeof data === 'object' && data ? data.panelId : null;
+
+  if (targetId && donationWindows.has(targetId)) {
+    const win = donationWindows.get(targetId);
+    if (win && !win.isDestroyed()) {
+      win.setMovable(!isLocked);
+      win.setResizable(!isLocked);
+    }
+    return;
+  }
+
+  // If sent from sender window
+  for (const win of donationWindows.values()) {
+    if (win && !win.isDestroyed() && win.webContents === event.sender) {
+      win.setMovable(!isLocked);
+      win.setResizable(!isLocked);
+      return;
+    }
+  }
+
+  // Fallback: apply to all active windows
+  for (const win of donationWindows.values()) {
+    if (win && !win.isDestroyed()) {
+      win.setMovable(!isLocked);
+      win.setResizable(!isLocked);
+    }
   }
 });
 
-// Broadcast events between windows (mainWindow <-> donationWindow)
+// Broadcast events between all windows (mainWindow <-> all donation windows)
 ipcMain.on('broadcast-donation-event', (event, data) => {
-  if (donationWindow && !donationWindow.isDestroyed() && event.sender !== donationWindow.webContents) {
-    donationWindow.webContents.send('donation-event', data);
+  for (const win of donationWindows.values()) {
+    if (win && !win.isDestroyed() && event.sender !== win.webContents) {
+      win.webContents.send('donation-event', data);
+    }
   }
   if (mainWindow && !mainWindow.isDestroyed() && event.sender !== mainWindow.webContents) {
     mainWindow.webContents.send('donation-event', data);
@@ -416,8 +493,10 @@ ipcMain.on('broadcast-donation-event', (event, data) => {
 });
 
 ipcMain.on('broadcast-medser-event', (event, data) => {
-  if (donationWindow && !donationWindow.isDestroyed() && event.sender !== donationWindow.webContents) {
-    donationWindow.webContents.send('medser-event', data);
+  for (const win of donationWindows.values()) {
+    if (win && !win.isDestroyed() && event.sender !== win.webContents) {
+      win.webContents.send('medser-event', data);
+    }
   }
   if (mainWindow && !mainWindow.isDestroyed() && event.sender !== mainWindow.webContents) {
     mainWindow.webContents.send('medser-event', data);
@@ -425,8 +504,10 @@ ipcMain.on('broadcast-medser-event', (event, data) => {
 });
 
 ipcMain.on('broadcast-leaderboard-update', (event, data) => {
-  if (donationWindow && !donationWindow.isDestroyed() && event.sender !== donationWindow.webContents) {
-    donationWindow.webContents.send('leaderboard-update', data);
+  for (const win of donationWindows.values()) {
+    if (win && !win.isDestroyed() && event.sender !== win.webContents) {
+      win.webContents.send('leaderboard-update', data);
+    }
   }
   if (mainWindow && !mainWindow.isDestroyed() && event.sender !== mainWindow.webContents) {
     mainWindow.webContents.send('leaderboard-update', data);
@@ -434,8 +515,10 @@ ipcMain.on('broadcast-leaderboard-update', (event, data) => {
 });
 
 ipcMain.on('broadcast-donation-urls', (event, urls) => {
-  if (donationWindow && !donationWindow.isDestroyed()) {
-    donationWindow.webContents.send('sync-donation-urls', urls);
+  for (const win of donationWindows.values()) {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('sync-donation-urls', urls);
+    }
   }
 });
 
