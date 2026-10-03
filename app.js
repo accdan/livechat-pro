@@ -437,9 +437,9 @@ function handleOverlayMouseMove(e) {
     return;
   }
 
-  // Check if target or any ancestor is an interactive UI element or chat bubble
+  // Check if target or any ancestor is an interactive UI element (excluding bubble body so clicks pass through bubbles to background)
   const interactiveTarget = e.target && e.target.closest(
-    '.chat-item, .overlay-bar, .pinned-drawer, .leaderboard-drawer, .settings-side-panel, .scroll-bottom-btn, .modal-backdrop, .settings-info-overlay, .info-modal-card, .login-modal-box, .compact-acc-row, button, input, select, textarea, a, [role="button"]'
+    '.chat-actions, .btn-chat-act, .overlay-bar, .pinned-drawer, .leaderboard-drawer, .settings-side-panel, .scroll-bottom-btn, .modal-backdrop, .settings-info-overlay, .info-modal-card, .login-modal-box, .compact-acc-row, button, input, select, textarea, a, [role="button"]'
   );
 
   const shouldIgnore = !interactiveTarget;
@@ -1313,8 +1313,18 @@ function renderSingleChatMessage(msgObj) {
     <span class="chat-username ${userClass}">${escapeHtml(msgObj.username)}:</span>
     <span class="chat-text">${formattedText}</span>
     <div class="chat-actions">
-      <button class="btn-chat-act" onclick="pinMessage('${msgObj.id}')" title="Pin Message">📌</button>
-      <button class="btn-chat-act" onclick="copyMessageText('${msgObj.id}')" title="Copy Text">📋</button>
+      <button class="btn-chat-act btn-pin-act" onclick="pinMessage('${msgObj.id}')" title="Sematkan Pesan (Pin)">
+        <svg viewBox="0 0 24 24" width="10.5" height="10.5" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="17" x2="12" y2="22"></line>
+          <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.89A2 2 0 0 1 15 10.77V6l1-2H8l1 2v4.77a2 2 0 0 1-1.11 1.79l-1.78.89A2 2 0 0 0 5 15.24V17z"></path>
+        </svg>
+      </button>
+      <button class="btn-chat-act btn-copy-act" onclick="copyMessageText('${msgObj.id}', this)" title="Salin Teks (Copy)">
+        <svg viewBox="0 0 24 24" width="10.5" height="10.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+      </button>
     </div>
   `;
 
@@ -1456,8 +1466,18 @@ function updatePinnedUI() {
       <strong>${escapeHtml(msg.username)}:</strong>
       <span class="chat-text">${formatChatMessageWithEmojis(msg.text, msg)}</span>
       <div class="chat-actions" style="opacity:1; visibility:visible; display:inline-flex; gap:3px; margin-left:auto;">
-        <button class="btn-chat-act" onclick="copyMessageText('${msg.id}')" title="Copy Text">📋</button>
-        <button class="btn-chat-act" onclick="unpinMessage('${msg.id}')" title="Buka Pin (Unpin)">✕</button>
+        <button class="btn-chat-act btn-copy-act" onclick="copyMessageText('${msg.id}', this)" title="Salin Teks">
+          <svg viewBox="0 0 24 24" width="10.5" height="10.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
+        <button class="btn-chat-act btn-unpin-act" onclick="unpinMessage('${msg.id}')" title="Buka Pin (Unpin)">
+          <svg viewBox="0 0 24 24" width="10.5" height="10.5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </div>
     </div>
   `).join('');
@@ -1508,7 +1528,7 @@ function exportChatLog() {
   URL.revokeObjectURL(url);
 }
 
-function copyMessageText(msgIdOrText) {
+function copyMessageText(msgIdOrText, btnEl) {
   let textToCopy = msgIdOrText;
   const foundMsg = state.messages.find(m => m.id === msgIdOrText) || state.pinnedMessages.find(m => m.id === msgIdOrText);
   if (foundMsg) {
@@ -1519,6 +1539,22 @@ function copyMessageText(msgIdOrText) {
       navigator.clipboard.writeText(textToCopy).catch(() => {});
     }
     playRetroSound('click');
+
+    const targetBtn = btnEl || (typeof event !== 'undefined' && event && event.currentTarget);
+    if (targetBtn && targetBtn.classList) {
+      targetBtn.classList.add('copied');
+      const origHtml = targetBtn.innerHTML;
+      targetBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" width="10.5" height="10.5" fill="none" stroke="#4ade80" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>`;
+      setTimeout(() => {
+        if (targetBtn && targetBtn.classList) {
+          targetBtn.classList.remove('copied');
+          targetBtn.innerHTML = origHtml;
+        }
+      }, 1200);
+    }
   }
 }
 

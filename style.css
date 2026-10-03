@@ -584,7 +584,6 @@ body.bg-obs-green {
 
 /* Floating Bubble Chat Item */
 .chat-item {
-  pointer-events: auto !important;
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
@@ -711,31 +710,85 @@ body.bg-obs-green {
   border-radius: 2px;
 }
 
-/* Chat item actions */
+/* Sleek Pastel Chat Action Bar & Buttons */
 .chat-actions {
   display: inline-flex;
-  gap: 2px;
+  align-items: center;
+  gap: 3px;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s ease;
   margin-left: auto;
+  pointer-events: auto !important;
+  background: rgba(15, 20, 30, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 2px 3px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  transform: translateY(2px);
 }
 
 .chat-item:hover .chat-actions {
   opacity: 1;
+  transform: translateY(0);
 }
 
 .btn-chat-act {
-  background: none;
-  border: none;
-  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+  color: #cbd5e1;
   cursor: pointer;
-  font-size: 11px;
-  padding: 0 2px;
+  padding: 0;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: auto !important;
 }
 
-.btn-chat-act:hover {
-  color: #ffffff;
-  transform: scale(1.15);
+.btn-chat-act svg {
+  pointer-events: none;
+}
+
+.btn-pin-act:hover {
+  background: #ff9c9e !important;
+  border-color: #000000 !important;
+  color: #000000 !important;
+  transform: scale(1.1);
+  box-shadow: 0 2px 6px rgba(255, 156, 158, 0.4);
+}
+
+.btn-pin-act:hover svg {
+  stroke: #000000 !important;
+}
+
+.btn-copy-act:hover {
+  background: #9db0ff !important;
+  border-color: #000000 !important;
+  color: #000000 !important;
+  transform: scale(1.1);
+  box-shadow: 0 2px 6px rgba(157, 176, 255, 0.4);
+}
+
+.btn-copy-act:hover svg {
+  stroke: #000000 !important;
+}
+
+.btn-unpin-act:hover {
+  background: #ef4444 !important;
+  border-color: #000000 !important;
+  color: #ffffff !important;
+  transform: scale(1.1);
+}
+
+.btn-chat-act.copied {
+  background: rgba(34, 197, 94, 0.25) !important;
+  border-color: #4ade80 !important;
+  color: #4ade80 !important;
 }
 
 /* System Message */
