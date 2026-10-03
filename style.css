@@ -584,6 +584,7 @@ body.bg-obs-green {
 
 /* Floating Bubble Chat Item */
 .chat-item {
+  pointer-events: auto !important;
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;

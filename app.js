@@ -48,7 +48,8 @@ const state = {
     fontSize: 'normal',
     highlightUsers: true,
     isLocked: false,
-    alwaysOnTop: true
+    alwaysOnTop: true,
+    clickThrough: true
   },
   appearance: {
     bgMode: 'transparent',
@@ -209,6 +210,16 @@ document.addEventListener('DOMContentLoaded', () => {
   } catch (e) {}
   const chkAutoScroll = document.getElementById('chkAutoScroll');
   if (chkAutoScroll) chkAutoScroll.checked = state.settings.autoScroll;
+
+  // Restore saved click-through preference
+  try {
+    const savedClickThrough = localStorage.getItem('livechat_clickthrough');
+    if (savedClickThrough !== null) {
+      state.settings.clickThrough = (savedClickThrough === 'true');
+    }
+  } catch (e) {}
+  const chkClickThrough = document.getElementById('chkClickThrough');
+  if (chkClickThrough) chkClickThrough.checked = state.settings.clickThrough;
 
   // Restore saved appearance customizations
   loadSavedAppearance();
@@ -397,6 +408,50 @@ function initGlobalListeners() {
       closeSettingsModal();
     }
   });
+
+  // Dynamic Click-Through Overlay for Transparent Areas
+  window.addEventListener('mousemove', handleOverlayMouseMove);
+  window.addEventListener('mouseover', handleOverlayMouseMove);
+  window.addEventListener('mouseleave', () => {
+    if (!electronIpc || state.settings.clickThrough === false) return;
+    currentIgnoreMouseState = true;
+    electronIpc.send('set-ignore-mouse-events', true, { forward: true });
+  });
+
+  // Initial click-through activation for transparent overlay background
+  if (electronIpc && state.settings.clickThrough !== false) {
+    currentIgnoreMouseState = true;
+    electronIpc.send('set-ignore-mouse-events', true, { forward: true });
+  }
+}
+
+let currentIgnoreMouseState = null;
+
+function handleOverlayMouseMove(e) {
+  if (!electronIpc) return;
+  if (state.settings.clickThrough === false) {
+    if (currentIgnoreMouseState !== false) {
+      currentIgnoreMouseState = false;
+      electronIpc.send('set-ignore-mouse-events', false);
+    }
+    return;
+  }
+
+  // Check if target or any ancestor is an interactive UI element or chat bubble
+  const interactiveTarget = e.target && e.target.closest(
+    '.chat-item, .overlay-bar, .pinned-drawer, .leaderboard-drawer, .settings-side-panel, .scroll-bottom-btn, .modal-backdrop, .settings-info-overlay, .info-modal-card, .login-modal-box, .compact-acc-row, button, input, select, textarea, a, [role="button"]'
+  );
+
+  const shouldIgnore = !interactiveTarget;
+
+  if (currentIgnoreMouseState !== shouldIgnore) {
+    currentIgnoreMouseState = shouldIgnore;
+    if (shouldIgnore) {
+      electronIpc.send('set-ignore-mouse-events', true, { forward: true });
+    } else {
+      electronIpc.send('set-ignore-mouse-events', false);
+    }
+  }
 }
 
 // --- Menu Bar Helpers ---
@@ -1259,7 +1314,7 @@ function renderSingleChatMessage(msgObj) {
     <span class="chat-text">${formattedText}</span>
     <div class="chat-actions">
       <button class="btn-chat-act" onclick="pinMessage('${msgObj.id}')" title="Pin Message">📌</button>
-      <button class="btn-chat-act" onclick="copyMessageText('${escapeHtml(msgObj.text)}')" title="Copy Text">📋</button>
+      <button class="btn-chat-act" onclick="copyMessageText('${msgObj.id}')" title="Copy Text">📋</button>
     </div>
   `;
 
@@ -1397,11 +1452,21 @@ function updatePinnedUI() {
   container.innerHTML = state.pinnedMessages.map(msg => `
     <div class="chat-item">
       <span class="chat-timestamp">[${msg.timestamp}]</span>
-      <span class="chat-badge ${msg.platform === 'youtube' ? 'yt' : (msg.platform === 'tiktok' ? 'tt' : 'tw')}">[${msg.platform === 'youtube' ? 'YT' : (msg.platform === 'tiktok' ? 'TT' : 'TW')}]</span>
+      <span class="chat-badge ${msg.platform === 'youtube' ? 'yt' : (msg.platform === 'tiktok' ? 'tt' : (msg.platform === 'discord' ? 'dc' : 'tw'))}">[${msg.platform === 'youtube' ? 'YT' : (msg.platform === 'tiktok' ? 'TT' : (msg.platform === 'discord' ? 'DC' : 'TW'))}]</span>
       <strong>${escapeHtml(msg.username)}:</strong>
       <span class="chat-text">${formatChatMessageWithEmojis(msg.text, msg)}</span>
+      <div class="chat-actions" style="opacity:1; visibility:visible; display:inline-flex; gap:3px; margin-left:auto;">
+        <button class="btn-chat-act" onclick="copyMessageText('${msg.id}')" title="Copy Text">📋</button>
+        <button class="btn-chat-act" onclick="unpinMessage('${msg.id}')" title="Buka Pin (Unpin)">✕</button>
+      </div>
     </div>
   `).join('');
+}
+
+function unpinMessage(msgId) {
+  playRetroSound('click');
+  state.pinnedMessages = state.pinnedMessages.filter(p => p.id !== msgId);
+  updatePinnedUI();
 }
 
 function togglePinnedDrawer() {
@@ -1443,9 +1508,42 @@ function exportChatLog() {
   URL.revokeObjectURL(url);
 }
 
-function copyMessageText(text) {
-  navigator.clipboard.writeText(text);
+function copyMessageText(msgIdOrText) {
+  let textToCopy = msgIdOrText;
+  const foundMsg = state.messages.find(m => m.id === msgIdOrText) || state.pinnedMessages.find(m => m.id === msgIdOrText);
+  if (foundMsg) {
+    textToCopy = foundMsg.text;
+  }
+  if (textToCopy) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(textToCopy).catch(() => {});
+    }
+    playRetroSound('click');
+  }
+}
+
+function toggleClickThroughSetting(val) {
+  if (typeof val === 'boolean') {
+    state.settings.clickThrough = val;
+  } else {
+    state.settings.clickThrough = !state.settings.clickThrough;
+  }
   playRetroSound('click');
+  const chk = document.getElementById('chkClickThrough');
+  if (chk) chk.checked = state.settings.clickThrough;
+
+  try {
+    localStorage.setItem('livechat_clickthrough', state.settings.clickThrough);
+  } catch (e) {}
+
+  if (!electronIpc) return;
+  if (!state.settings.clickThrough) {
+    currentIgnoreMouseState = false;
+    electronIpc.send('set-ignore-mouse-events', false);
+  } else {
+    currentIgnoreMouseState = true;
+    electronIpc.send('set-ignore-mouse-events', true, { forward: true });
+  }
 }
 
 function applyFilters() {

@@ -261,6 +261,13 @@ ipcMain.on('set-window-locked', (event, isLocked) => {
   }
 });
 
+ipcMain.on('set-ignore-mouse-events', (event, ignore, options) => {
+  const targetWin = BrowserWindow.fromWebContents(event.sender);
+  if (targetWin && !targetWin.isDestroyed()) {
+    targetWin.setIgnoreMouseEvents(ignore, options || {});
+  }
+});
+
 ipcMain.on('window-minimize', () => {
   if (mainWindow) mainWindow.minimize();
 });
